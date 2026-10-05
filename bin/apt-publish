@@ -88,10 +88,12 @@ names=${names% }
 if git -C "$REPO_DIR" diff --cached --quiet -- db public; then
     log "Nothing to commit in the repository"
 else
-    git -C "$REPO_DIR" commit -q -m "add ${names:-packages}" -- db public
+    message="update the indices"
+    [[ -z "$names" ]] || message="add $names"
+    git -C "$REPO_DIR" commit -q -m "$message" -- db public
     git -C "$REPO_DIR" push -q
 fi
 
 ssh "$APT_REPO_HOST" "git -C $(printf %q "$APT_REPO_PATH") pull -q --ff-only"
 
-success "Published ${names:-the pending packages} to $APT_REPO_HOST:$APT_REPO_PATH ($APT_REPO_DIST)"
+success "Published ${names:-the indices} to $APT_REPO_HOST:$APT_REPO_PATH ($APT_REPO_DIST)"

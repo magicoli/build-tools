@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# The release: the release commit and the tag say v<version> and the changelog, the push, the publication, the GitHub
+# release, the next version; and it resumes where it stopped, and offers again what a passphrase prompt that timed out.
+#
+# Run with: tests/lib/bashunit tests/
+
+source "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
+
+function set_up() {
+    new_work
+    make_stubs
+    make_apt_repo
+    make_project 1.0.0-dev
+}
+function tear_down() {
+    drop_work
+}
+
+# The release, run in the project, its answers to the questions given in input
+release() { # input, arguments...
+    local input=$1
+    shift
+    (cd "$PROJECT" && printf '%s' "$input" | "$BT" release "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+}
+
+function test_the_release_commit_and_the_tag_are_the_version_then_the_changelog() {
+    local body
+    release "" >/dev/null
+    body=$(git -C "$PROJECT" log -1 --format=%b --grep='^v1.0.0$')
+    assert_equals "- new: the first thing
+- fix: the second thing, \`with code\`
+
+- update: after a blank line" "$body"
+    assert_equals "v1.0.0" "$(git -C "$PROJECT" log -1 --format=%s --grep='^v1.0.0$')"
+    assert_equals "v1.0.0" "$(git -C "$PROJECT" tag -l --format='%(contents:subject)' 1.0.0)"
+    assert_equals "$body" "$(git -C "$PROJECT" tag -l --format='%(contents:body)' 1.0.0 | sed '/^$/d;$!b' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')" || true
+}
+
+function test_the_tag_and_the_branch_are_pushed() {
+    release "" >/dev/null
+    assert_contains "1.0.0" "$(git -C "$WORK/github.git" tag)"
+    assert_equals "$(git -C "$PROJECT" rev-parse HEAD)" "$(git -C "$WORK/github.git" rev-parse dev)"
+}
+
+function test_the_next_version_follows_and_the_changelog_has_a_new_unreleased_section() {
+    release "" >/dev/null
+    assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
+    assert_equals "chore(version): 1.0.1-dev, the family linked again" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "### Unreleased
+### 1.0.0" "$(grep '^### ' "$PROJECT/CHANGELOG.md")"
+}
+
+function test_the_packages_are_published_and_the_zip_goes_to_the_github_release() {
+    release "" >/dev/null
+    assert_contains "apt-package --publish" "$(calls)"
+    assert_contains "gh release create 1.0.0 -R owner/demo --verify-tag --title 1.0.0" "$(calls)"
+    assert_contains "gh release upload 1.0.0 dist/demo-1.0.0.zip" "$(calls)"
+    assert_file_exists "$PROJECT/dist/demo-1.0.0.zip"
+}
+
+function test_a_pre_release_is_a_github_pre_release() {
+    printf '1.0.0-beta.1\n' >"$PROJECT/.version"
+    git -C "$PROJECT" commit -q -am "a beta"
+    release "" >/dev/null
+    assert_contains "--prerelease" "$(sed -n '/^gh release create/,/^gh release upload/p' "$STUB_LOG")"
+    assert_equals "1.0.0-beta.2" "$(cat "$PROJECT/.version")"
+}
+
+function test_nothing_under_unreleased_is_nothing_to_release_and_not_an_error() {
+    local out status
+    printf '## Changelog\n\n### Unreleased\n\n### 0.9.0\n\n- old\n' >"$PROJECT/CHANGELOG.md"
+    git -C "$PROJECT" commit -q -am "nothing new"
+    out=$(release "")
+    status=$?
+    assert_contains "nothing to release" "$out"
+    assert_equals "0" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+}
+
+function test_the_question_is_asked_and_no_stops_with_nothing_done() {
+    local out
+    unset RELEASE_YES
+    out=$(release "n
+")
+    assert_contains "stopped, nothing done" "$out"
+    assert_equals "0" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+}
+
+function test_it_resumes_where_it_stopped() {
+    # The GitHub release fails after the tag is pushed
+    FAIL_GH_CREATE=1 release "" >/dev/null
+    assert_contains "1.0.0" "$(git -C "$WORK/github.git" tag)"
+    assert_equals "1.0.0" "$(cat "$PROJECT/.version")"
+    unset FAIL_GH_CREATE
+    release "" >/dev/null
+    assert_equals "1" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+    assert_equals "1" "$(git -C "$PROJECT" log --format=%s | grep -c '^v1.0.0$')"
+    assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
+}
+
+function test_a_passphrase_prompt_that_times_out_is_offered_again() {
+    local out
+    export GPG_FAIL_FIRST=1
+    out=$(release "y
+y
+")
+    assert_equals "2" "$(grep -c 'clearsign' "$STUB_LOG")"
+    assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
+}
+
+function test_a_publication_that_times_out_at_the_export_redoes_the_export_alone() {
+    export APT_FAIL_ONCE=1 REPREPRO_FAIL_EXPORT=1
+    release "y
+y
+y
+" >/dev/null
+    assert_equals "2" "$(grep -c '^reprepro .* export' "$STUB_LOG")"
+    assert_contains "gh release create 1.0.0" "$(calls)"
+    assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
+}
+
+function test_it_refuses_without_an_apt_repository_before_doing_anything() {
+    local out
+    unset APT_REPO_DIR
+    out=$(release "")
+    assert_contains "APT_REPO_DIR is not set" "$out"
+    assert_equals "0" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+}
+
+function test_it_refuses_changes_made_by_hand_and_says_so() {
+    local out
+    echo more >>"$PROJECT/README.md"
+    out=$(release "")
+    assert_contains "commit or stash your changes first" "$out"
+}

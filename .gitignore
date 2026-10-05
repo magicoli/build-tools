@@ -14,3 +14,4 @@ build/
 tmp/
 .zed/
 .DS_Store
+.bashunit/

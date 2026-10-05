@@ -249,7 +249,7 @@ if $PUBLISH; then
         for deb in "${DEBS[@]}"; do
             [[ "$(dist_of "$deb")" != "$dist" ]] || group+=("$deb")
         done
-        APT_REPO_DIST=$dist "$BIN_DIR/apt-publish" "${group[@]}"
+        APT_REPO_DIST=$dist "${APT_PUBLISH:-$BIN_DIR/apt-publish}" "${group[@]}"
     done
 
     if [[ -n "$GITHUB_REPO" && ${#RELEASE_DEBS[@]} -gt 0 ]]; then
