@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.1.3
 
 - new: an executable `packaging/zip` makes the zip of a project instead of the generic one
