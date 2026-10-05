@@ -1,0 +1,16 @@
+#*#
+*~
+\#*\#
+._*
+.apdisk
+.#*
+vendor/
+**/.env
+.env
+.env.*
+!.env.example
+dist/
+build/
+tmp/
+.zed/
+.DS_Store

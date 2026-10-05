@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# apt-publish: add Debian packages to an apt repository managed with reprepro, and publish it.
+#
+# Usage: apt-publish <package.deb>...   add the packages, then publish
+#        apt-publish --resume           publish what is pending: after a publication that stopped when the repository
+#                                       was signed (the indices not signed, the changes not committed nor pushed)
+#
+# Nothing is known here of any repository, host or path. Settings come from the environment (the .env of a project,
+# loaded by its build script), or else from the .env of the repository:
+#   APT_REPO_DIR   the local clone of the repository (conf/, db/, public/): required
+#   APT_REPO_HOST  ssh host serving the repository (e.g. apt.example.com)
+#   APT_REPO_PATH  git clone of the repository on that host (e.g. /var/www/apt-repo)
+#   APT_REPO_DIST  suite (default: stable)
+#
+# The packages are added to the clone with reprepro, which signs the repository with the key of conf/distributions (it
+# asks for the passphrase: when nobody answers in time, it says so and offers to try again). The clone is updated first,
+# then committed and pushed, and the host pulls it: the host only serves signed files and has no key.
+#
+# Requirements: reprepro, gpg with the signing key, git, ssh.
+
+set -e
+
+# No .env to read here: what is set comes from the caller, the repository has its own defaults, read below
+BASE_DIR=/dev/null
+source "$(dirname "$(realpath "$0")")/../src/lib/helpers"
+
+REPO_DIR=${APT_REPO_DIR:-}
+[[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): the local clone of the repository, in the .env of the project"
+
+# Value of a setting in the .env of the repository, if any
+env_default() {
+    [[ -f "$REPO_DIR/.env" ]] || return 0
+    (source "$REPO_DIR/.env" && echo "${!1:-}")
+}
+for setting in APT_REPO_HOST APT_REPO_PATH APT_REPO_DIST; do
+    [[ -n "${!setting:-}" ]] || printf -v "$setting" '%s' "$(env_default "$setting")"
+done
+APT_REPO_DIST=${APT_REPO_DIST:-stable}
+[[ -n "$APT_REPO_HOST" ]] || die "APT_REPO_HOST is not set: the ssh host serving the repository, in the .env of the project or of the repository"
+[[ -n "$APT_REPO_PATH" ]] || die "APT_REPO_PATH is not set: the clone of the repository on that host, in the .env of the project or of the repository"
+
+resume=false
+if [[ ${1:-} == --resume ]]; then
+    resume=true
+    shift
+fi
+if [[ $resume == false && $# -eq 0 ]]; then
+    USAGE="apt-publish <package.deb>... | apt-publish --resume"
+    usage >&2
+    exit 1
+fi
+
+# Right before publishing, bring this clone up to date and push its own commits: other machines publish to the same
+# repository, and reprepro's database cannot be merged afterwards
+git -C "$REPO_DIR" pull -q --rebase --autostash
+git -C "$REPO_DIR" push -q
+
+# The passphrase prompt needs the terminal
+if tty -s; then
+    GPG_TTY=$(tty)
+    export GPG_TTY
+fi
+
+if [[ $resume == false ]]; then
+    reprepro -b "$REPO_DIR" includedeb "$APT_REPO_DIST" "$@" 2>&1 | tee "$TMP.reprepro"
+    status=${PIPESTATUS[0]}
+    if [[ $status != 0 ]]; then
+        if grep -q "Could not finish exporting" "$TMP.reprepro"; then
+            # The packages are in the database but the indices are not signed: only the export is to do again
+            log "The packages are added to the repository, but its indices could not be signed (did the passphrase prompt time out?)"
+            retry "The export of the indices" reprepro -b "$REPO_DIR" export
+        else
+            die "reprepro failed, see above"
+        fi
+    fi
+else
+    retry "The export of the indices" reprepro -b "$REPO_DIR" export
+fi
+
+# Only the files reprepro changes: the clone may have other work in progress
+git -C "$REPO_DIR" add -A db public
+if [[ $resume == true ]]; then
+    names=$(git -C "$REPO_DIR" diff --cached --name-only -- public/pool | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
+else
+    names=$(basename -a "$@" | tr '\n' ' ')
+fi
+names=${names% }
+if git -C "$REPO_DIR" diff --cached --quiet -- db public; then
+    log "Nothing to commit in the repository"
+else
+    git -C "$REPO_DIR" commit -q -m "add ${names:-packages}" -- db public
+    git -C "$REPO_DIR" push -q
+fi
+
+ssh "$APT_REPO_HOST" "git -C $(printf %q "$APT_REPO_PATH") pull -q --ff-only"
+
+success "Published ${names:-the pending packages} to $APT_REPO_HOST:$APT_REPO_PATH ($APT_REPO_DIST)"

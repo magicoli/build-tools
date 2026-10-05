@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+# apt-package: build the Debian packages of a project with nfpm, and publish them.
+#
+# Usage, from anywhere in the project:
+#   apt-package [package...]             build into dist/
+#   apt-package --publish [package...]   build and publish with apt-publish, and on GitHub
+#
+# The project describes each package in its own packaging/<package>.yaml file. All are built, or only the ones named.
+# Where to publish is not known here: it is in the .env of the project, and the .env of the apt repository for what the
+# project leaves out:
+#   APT_REPO_DIR              the local clone of the apt repository (conf/distributions, db, public): required to publish
+#   APT_REPO_DIST             the suite of the releases (default: stable)
+#   APT_REPO_PRERELEASE_DIST  the suite of the pre-releases, the versions with a ~ (1.2.3~beta.1), when the repository has
+#                             one (default: the same as the releases)
+#   DEB_MAINTAINER  maintainer, e.g. "Name <maintainer@example.com>", DEB_VENDOR vendor, DEB_URL homepage: for the
+#                   fields a definition leaves out
+# (the host and the path the repository is published to are the business of apt-publish, see there)
+#
+# An executable packaging/build, when present, runs first from the project root, with the names of the packages to
+# build, e.g. to install dependencies into a build folder. It can give variables to the definitions in
+# build/packaging.env (NAME=value lines).
+#
+# ${VERSION} in the definitions is the version of the project, the current git
+# tag (1.2.3); other builds get a development version, 1.2.3+5.g1a2b3c4 for 5
+# commits after the tag, which sorts after it. ${DEB_VERSION} is that
+# version as nfpm writes it with version_schema: semver (1.2.3-beta.1 ->
+# 1.2.3~beta.1), e.g. for a dependency between packages of the same project:
+# other-package (= ${DEB_VERSION}). A package can have its own version
+# instead, e.g. from a variable of build/packaging.env: any ${NAME} of the
+# environment is replaced in the definitions.
+#
+# A definition using ${ARCH} is built for each architecture of ARCHITECTURES
+# (e.g. "amd64 arm64" in build/packaging.env, default amd64).
+#
+# Publishing needs a clean tree, and a version tag for the packages with the
+# version of the project. The packages whose version is already in the
+# repository are skipped: each package keeps its own pace.
+#
+# When the project has a GitHub remote, publishing on a version tag also
+# attaches the packages with the version of the project to the GitHub release
+# of the tag, created if missing with the tag message as notes, with their
+# checksums signed by the repository key (SHA256SUMS and SHA256SUMS.asc). The
+# tag must be pushed to GitHub first.
+#
+# Requirements: nfpm (https://nfpm.goreleaser.com), perl, and to publish,
+# those of apt-publish and gh (https://cli.github.com) for the GitHub releases.
+
+set -e
+
+source "$(dirname "$(realpath "$0")")/../src/lib/common"
+# apt-publish is next to this script, even when called through a link
+BIN_DIR=$BUILD_TOOLS/bin
+
+PUBLISH=false
+NAMES=()
+for arg in "$@"; do
+    case "$arg" in
+        --publish) PUBLISH=true ;;
+        -*)
+            die "Unknown option: $arg"
+            ;;
+        *) NAMES+=("$arg") ;;
+    esac
+done
+
+REPO_DIR=${APT_REPO_DIR:-}
+if $PUBLISH; then
+    [[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): the local clone of the repository to publish to, in the .env of the project"
+    # Before publishing, bring this clone up to date and push its own commits:
+    # the server and other machines publish to the same repository.
+    git -C "$REPO_DIR" pull -q --rebase --autostash
+    git -C "$REPO_DIR" push -q
+fi
+
+PROJECT_DIR=$BUILD_PROJECT
+if [[ ${#NAMES[@]} -eq 0 ]]; then
+    CONFIGS=("$PROJECT_DIR"/packaging/*.yaml)
+    if [[ ! -f "${CONFIGS[0]}" ]]; then
+        die "No package definition: $PROJECT_DIR/packaging/*.yaml"
+    fi
+    NAMES=($(basename -a "${CONFIGS[@]}" | sed 's/\.yaml$//'))
+else
+    CONFIGS=()
+    for name in "${NAMES[@]}"; do
+        if [[ ! -f "$PROJECT_DIR/packaging/$name.yaml" ]]; then
+            die "No package definition: $PROJECT_DIR/packaging/$name.yaml"
+        fi
+        CONFIGS+=("$PROJECT_DIR/packaging/$name.yaml")
+    done
+fi
+
+# Settings: the .env of the apt repository, then the one of the project
+set -a
+for env in "${REPO_DIR:+$REPO_DIR/.env}" "$PROJECT_DIR/.env"; do
+    [[ -z "$env" || ! -f "$env" ]] || source "$env"
+done
+set +a
+
+# Whether a definition has the version of the project
+project_version() {
+    grep -qE '\$\{(DEB_)?VERSION\}' "$1"
+}
+
+# A build after a version tag, as git describe names it (1.2.3-5-g1a2b3c4, and
+# -dirty with local changes), becomes 1.2.3+5.g1a2b3c4[.dirty]: it must sort
+# after the tag, which 1.2.3~5-g1a2b3c4 (the ~ nfpm and dpkg give to the -) would not
+dev_version() {
+    local v=${1#v} dirty=
+    [[ "$v" != *-dirty ]] || { dirty=yes; v=${v%-dirty}; }
+    if [[ "$v" =~ ^(.+)-([0-9]+)-g([0-9a-f]+)$ ]]; then
+        v=${BASH_REMATCH[1]}+${BASH_REMATCH[2]}.g${BASH_REMATCH[3]}
+        [[ -z "$dirty" ]] || v+=.dirty
+    elif [[ -n "$dirty" ]]; then
+        v+=+dirty
+    fi
+    echo "$v"
+}
+
+# Version tags only (1.2.3, v1.2.3): a project may have other tags
+DESCRIBE=(git -C "$PROJECT_DIR" describe --tags --match '[0-9]*' --match 'v[0-9]*')
+TAG=
+if $PUBLISH; then
+    if ! git -C "$PROJECT_DIR" diff --quiet HEAD; then
+        die "Publishing needs a clean tree."
+    fi
+    if VERSION=$("${DESCRIBE[@]}" --exact-match 2>/dev/null); then
+        TAG=$VERSION
+    else
+        for definition in "${CONFIGS[@]}"; do
+            if project_version "$definition"; then
+                die "Publishing $(basename "$definition" .yaml) needs a version tag (git tag 1.2.3)."
+            fi
+        done
+        VERSION=$(dev_version "$("${DESCRIBE[@]}" 2>/dev/null)") ||
+            VERSION="0.0.0-$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
+    fi
+
+    # The GitHub remote and repository (owner/name) of the project, if any,
+    # checked before publishing anything
+    GITHUB_REPO=
+    if [[ -n "$TAG" ]]; then
+        read -r GITHUB_REMOTE GITHUB_REPO < <(
+            git -C "$PROJECT_DIR" remote -v | sed -nE \
+                's#^([^[:space:]]+)[[:space:]]+(git@github\.com:|(https|ssh)://([^@/]+@)?github\.com/)([^[:space:]]+)[[:space:]]+\(push\)$#\1 \5#p' |
+                head -1
+        ) || true
+        GITHUB_REPO=${GITHUB_REPO%.git}
+    fi
+    if [[ -n "$GITHUB_REPO" ]]; then
+        if ! gh auth status >/dev/null 2>&1; then
+            die "The GitHub release needs gh, logged in (gh auth login)."
+        fi
+        if [[ $(git -C "$PROJECT_DIR" ls-remote --tags "$GITHUB_REMOTE" "refs/tags/$TAG" | cut -f1) != \
+            $(git -C "$PROJECT_DIR" rev-parse "refs/tags/$TAG") ]]; then
+            die "Push the tag to GitHub first: git push $GITHUB_REMOTE $TAG"
+        fi
+    fi
+else
+    VERSION=$(dev_version "$("${DESCRIBE[@]}" --dirty 2>/dev/null)") ||
+        VERSION="0.0.0-$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
+fi
+export VERSION="${VERSION#v}"
+export DEB_VERSION="${VERSION/-/\~}"
+
+# nfpm.yaml paths are relative to the project root
+cd "$PROJECT_DIR"
+[[ ! -x packaging/build ]] || packaging/build "${NAMES[@]}"
+# Variables the build gives to the definitions
+if [[ -f build/packaging.env ]]; then
+    set -a
+    source build/packaging.env
+    set +a
+fi
+mkdir -p dist
+
+# The suite of a package file (name_version_arch.deb): the pre-releases, a ~ in the version, go to
+# APT_REPO_PRERELEASE_DIST when there is one, the others to APT_REPO_DIST
+dist_of() {
+    local file version
+    file=$(basename "$1" .deb)
+    version=${file#*_}
+    version=${version%_*}
+    if [[ "$version" == *~* && -n "${APT_REPO_PRERELEASE_DIST:-}" ]]; then
+        echo "$APT_REPO_PRERELEASE_DIST"
+    else
+        echo "${APT_REPO_DIST:-stable}"
+    fi
+}
+
+# Whether the repository already has this package file (name_version_arch.deb)
+published() {
+    local file name version
+    file=$(basename "$1" .deb)
+    name=${file%%_*}
+    version=${file#*_}
+    version=${version%_*}
+    reprepro -b "$REPO_DIR" list "$(dist_of "$1")" "$name" | grep -q ": $name $version\$"
+}
+
+# Each package definition, with the variables of the environment and the
+# defaults for the fields it leaves out
+config=$(mktemp)
+trap 'rm -f "$config" "$TMP" "$TMP".* "$LOCK"' EXIT
+add_default() {
+    local field=$1 value=$2
+    grep -q "^$field:" "$config" || [[ -z "$value" ]] || printf '\n%s: "%s"\n' "$field" "$value" >>"$config"
+}
+DEBS=()
+RELEASE_DEBS=()
+for definition in "${CONFIGS[@]}"; do
+    archs=(-)
+    ! grep -q '\${ARCH}' "$definition" || read -ra archs <<<"${ARCHITECTURES:-amd64}"
+    for arch in "${archs[@]}"; do
+        if [[ "$arch" == - ]]; then
+            unset ARCH
+        else
+            export ARCH=$arch
+        fi
+        perl -pe 's/\$\{(\w+)\}/exists $ENV{$1} ? $ENV{$1} : $&/ge' "$definition" >"$config"
+        add_default maintainer "${DEB_MAINTAINER:-}"
+        add_default vendor "${DEB_VENDOR:-}"
+        add_default homepage "${DEB_URL:-}"
+        output=$(nfpm package --config "$config" --packager deb --target dist/)
+        echo "$output"
+        deb=$(sed -n 's/.*created package: //p' <<<"$output")
+        if $PUBLISH && published "$deb"; then
+            echo "Already published: $(basename "$deb")"
+            continue
+        fi
+        DEBS+=("$deb")
+        ! project_version "$definition" || RELEASE_DEBS+=("$deb")
+    done
+done
+
+if $PUBLISH; then
+    if [[ ${#DEBS[@]} -eq 0 ]]; then
+        echo "Nothing to publish."
+        exit 0
+    fi
+
+    # The passphrase prompt needs the terminal
+    if tty -s; then
+        export GPG_TTY=$(tty)
+    fi
+
+    # One call of apt-publish by suite; it updates the clone again, right before changing it
+    for dist in $(for deb in "${DEBS[@]}"; do dist_of "$deb"; done | sort -u); do
+        group=()
+        for deb in "${DEBS[@]}"; do
+            [[ "$(dist_of "$deb")" != "$dist" ]] || group+=("$deb")
+        done
+        APT_REPO_DIST=$dist "$BIN_DIR/apt-publish" "${group[@]}"
+    done
+
+    if [[ -n "$GITHUB_REPO" && ${#RELEASE_DEBS[@]} -gt 0 ]]; then
+        # Checksums signed with the key of the repository, whose passphrase
+        # the agent still has
+        sign_key=$(awk -v dist="$(dist_of "${RELEASE_DEBS[0]}")" '
+            $1 == "Codename:" { codename = $2 }
+            $1 == "SignWith:" && codename == dist { print $2; exit }
+        ' "$REPO_DIR/conf/distributions")
+        (cd dist && shasum -a 256 "${RELEASE_DEBS[@]##*/}" >SHA256SUMS)
+        gpg --yes --armor --detach-sign --local-user "$sign_key" \
+            --output dist/SHA256SUMS.asc dist/SHA256SUMS
+        ASSETS=("${RELEASE_DEBS[@]}" dist/SHA256SUMS dist/SHA256SUMS.asc)
+
+        if gh release view "$TAG" -R "$GITHUB_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" -R "$GITHUB_REPO" --clobber
+        else
+            # Versions like 1.2.3-beta.1 are prereleases
+            prerelease=()
+            [[ "$VERSION" != *-* ]] || prerelease=(--prerelease)
+            # Notes: the tag message, without its title line
+            gh release create "$TAG" "${ASSETS[@]}" -R "$GITHUB_REPO" --verify-tag \
+                --title "$TAG" --notes "$(git tag -l --format='%(contents:body)' "$TAG")" \
+                "${prerelease[@]}" >/dev/null
+        fi
+        echo "Attached to https://github.com/$GITHUB_REPO/releases/tag/$TAG"
+    fi
+fi

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# build-tools COMMAND [ARGUMENTS]: build, release and publish a project (see README.md). The commands are in libexec/.
+
+set -e
+here=$(dirname "$(realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")
+libexec=$(cd "$here/../libexec" && pwd)
+
+usage() {
+    cat >&2 <<USAGE
+usage: build-tools COMMAND [ARGUMENTS]
+
+  build [deb|zip] [package...]   the Debian packages and the zip of the project, from the last commit
+  release [VERSION]              the whole release, from where it stands (release status: what remains)
+  switch dev|release             the projects of the family linked (dev) or required by version (release)
+  stage DIR deb|zip              the files a package or a zip holds, in DIR
+  version                        the version of this build, as VERSION= and DEB_VERSION=
+  zip                            dist/<project>-<version>.zip
+
+Packages are made and published with apt-package and apt-publish (their own commands).
+USAGE
+    exit 2
+}
+
+command=${1:-}
+[[ -n "$command" && -x "$libexec/$command" ]] || usage
+shift
+exec "$libexec/$command" "$@"

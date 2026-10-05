@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# dist/<project>-<version>.zip: the project as distributed (see stage, with its vendor folder when it has composer
+# dependencies), to unzip and use without composer or any other tool.
+
+set -e
+source "$(dirname "$(realpath "$0")")/../src/lib/common"
+
+name=$(project_name)
+eval "$("$BUILD_TOOLS/libexec/version")"
+"$BUILD_TOOLS/libexec/stage" "build/zip/$name" zip
+mkdir -p dist
+rm -f "dist/$name-$VERSION.zip"
+(cd build/zip && zip -qr "$OLDPWD/dist/$name-$VERSION.zip" "$name")
+success "dist/$name-$VERSION.zip"

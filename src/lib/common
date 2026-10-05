@@ -1,0 +1,27 @@
+# What the commands that work on a project share: where the tools are, which project, and the functions of bash-tools
+# (see helpers). Sourced by the commands, not run.
+#
+# The project is the git repository the command is run in (BUILD_PROJECT names another one). Sourcing bash-tools reads the
+# .env of the project, where its settings are (see README.md): nothing is known here of any project, host or path.
+
+_here=$(dirname "$(realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")
+BUILD_PROJECT=${BUILD_PROJECT:-$(git rev-parse --show-toplevel 2>/dev/null || true)}
+if [[ -z "$BUILD_PROJECT" ]]; then
+    echo "${0##*/}: run it in the project, a git repository (or BUILD_PROJECT=folder)" >&2
+    exit 1
+fi
+BASE_DIR=$BUILD_PROJECT
+# shellcheck disable=SC1091
+. "$_here/helpers"
+unset _here
+
+cd "$BUILD_PROJECT"
+
+# The name of the project: BUILD_NAME, else the one of composer.json, else the one of the origin remote, else its folder
+project_name() {
+    local name=${BUILD_NAME:-}
+    [[ -z "$name" && -f composer.json ]] && name=$(sed -n 's#^[[:space:]]*"name":[[:space:]]*"[^/"]*/\([^"]*\)".*#\1#p' composer.json | head -1)
+    [[ -n "$name" ]] || name=$(basename "$(git remote get-url origin 2>/dev/null || true)" .git)
+    [[ -n "$name" && $name != . ]] || name=$(basename "$BUILD_PROJECT")
+    echo "$name"
+}

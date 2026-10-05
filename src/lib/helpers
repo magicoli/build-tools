@@ -1,0 +1,36 @@
+# The functions of bash-tools (log, success, warning, die, end, yesno, require, read_env...), and retry. Sourced by the
+# commands, not run. BASE_DIR, when set before, is the folder whose .env bash-tools reads (the project for most commands).
+#
+# The bash-tools of the same vendor folder comes first, else the one of this repository (composer), else the package, else
+# the PATH.
+
+_here=$(dirname "$(realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")
+BUILD_TOOLS=$(cd "$_here/../.." && pwd)
+unset _here
+
+for _helpers in "$BUILD_TOOLS/../bash-tools/bin/bash-helpers" "$BUILD_TOOLS/vendor/magicoli/bash-tools/bin/bash-helpers" /usr/share/bash-tools/bin/bash-helpers; do
+    [[ -f "$_helpers" ]] && break
+    _helpers=
+done
+[[ -n "$_helpers" ]] || _helpers=$(command -v bash-helpers) || {
+    echo "${0##*/}: bash-helpers not found: install bash-tools (composer require --dev magicoli/build-tools brings it)" >&2
+    exit 1
+}
+# Sourcing bash-tools older than 1.0.6 stops a script under set -e (read_env returns 1 when APP_ENV is not set)
+_errexit=
+[[ $- == *e* ]] && _errexit=1
+set +e
+# shellcheck disable=SC1090
+. "$_helpers"
+[[ -z "$_errexit" ]] || set -e
+unset _helpers _errexit
+
+# What needs the passphrase of a key fails when nobody answers the prompt in time (nobody stays in front of the screen
+# for a release): the failure is said, and trying again is offered, as long as wanted
+retry() { # what, command...
+    local what=$1
+    shift
+    until "$@"; do
+        yesno y "$what failed (the passphrase prompt may have timed out). Try again?" || die "$what failed, stopped"
+    done
+}
