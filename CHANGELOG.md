@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- fix: the release report lists only the packages that carry the version of the project
+
 ### 0.1.4
 
 - new: an executable `packaging/build-zip` in the project overrides the generic one

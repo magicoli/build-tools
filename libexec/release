@@ -79,6 +79,15 @@ apt_repo_dir() {
 signing_key() {
 	awk '$1 == "SignWith:" {print $2; exit}' "$(apt_repo_dir)/conf/distributions" 2>/dev/null || true
 }
+# The packages that carry the version of the project: the others (OpenSimulator, its modules...) have their own, and
+# a release only publishes them when that version is new
+carrying_version() {
+	local definition
+	for definition in packaging/*.yaml; do
+		grep -qE '\$\{(DEB_)?VERSION\}' "$definition" && sed -n 's/^name: *//p' "$definition" | head -1
+	done
+	return 0
+}
 # A step that fails leaves the files as they were
 restore() {
 	# shellcheck disable=SC2046
@@ -137,7 +146,7 @@ family=
 
 # What is about to be published, in one report; what a previous run already did is said on one line
 show_plan() {
-	local lines assets=zip publication=github.com/$repo steps=() report done_steps
+	local lines assets=zip publication=github.com/$repo steps=() report done_steps names
 	if [[ $published == 1 ]]; then
 		log "$project $new is published: https://github.com/$repo/releases/tag/$tag"
 		return
@@ -148,7 +157,8 @@ show_plan() {
 		lines=$(changelog_section Unreleased)
 	fi
 	if packaged; then
-		assets+=", deb ($(sed -n 's/^name: *//p' packaging/*.yaml | paste -sd, - | sed 's/,/, /g'))"
+		names=$(carrying_version | paste -sd, - | sed 's/,/, /g')
+		[[ -z "$names" ]] || assets+=", deb ($names)"
 		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "$new")), $publication"
 	fi
 	report="preparing to publish $project $new"

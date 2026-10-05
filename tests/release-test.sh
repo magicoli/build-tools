@@ -275,3 +275,15 @@ function test_a_pre_release_goes_to_the_suite_of_the_pre_releases() {
 " beta)
     assert_contains "  targets: host.example.test (unstable), github.com/owner/demo" "$out"
 }
+
+function test_the_report_lists_the_packages_that_carry_the_version_of_the_project() {
+    local out
+    printf 'name: other-${OTHER_VERSION}\nversion: ${OTHER_VERSION}\n' >"$PROJECT/packaging/other.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "a package with its own version"
+    unset RELEASE_YES
+    out=$(release "n
+")
+    assert_contains "  assets: zip, deb (demo)" "$out"
+    assert_not_contains "other" "$out"
+}
