@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.1.2
 
 - fix: a `build/packaging.env` left by a former build no longer gives its version to the package
