@@ -23,8 +23,12 @@ branch=$(git branch --show-current)
 name=$(project_name)
 project=$name
 
-version() {
-	tr -d '[:space:]' <.version
+# A project with a .version file keeps it up to date; one without derives its version from the tags (see src/lib/version)
+set_version() { # version
+	[[ ! -f .version ]] || echo "$1" >.version
+	if [[ -n "$(composer_version)" ]]; then
+		sed -i.bak "s/^\([[:space:]]*\"version\":[[:space:]]*\"\)[^\"]*/\1$1/" composer.json && rm -f composer.json.bak
+	fi
 }
 # The tags of this project start with v or not, as the last one did
 tag_name() {
@@ -72,15 +76,21 @@ signing_key() {
 }
 # A step that fails leaves the files as they were
 restore() {
-	git checkout -q -- .version CHANGELOG.md composer.json composer.lock 2>/dev/null || true
+	# shellcheck disable=SC2046
+	git checkout -q -- $(git ls-files .version CHANGELOG.md composer.json composer.lock) 2>/dev/null || true
 }
 
-[[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "commit or stash your changes first. A release leaves nothing uncommitted, these were made by hand:
+[[ -f CHANGELOG.md ]] || die "no CHANGELOG.md: its section ### Unreleased is the release message"
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "uncommitted changes, commit them first:
 $(git status --short --untracked-files=no)"
 
-current=$(version)
+current=$(current_version) || die "no version: add .version, a version to composer.json, or tag one"
+# A release commit on HEAD is a release in progress, whatever the version says
+in_progress=$(git log -1 --format=%s | sed -n 's/^v\([0-9][^[:space:]]*\)$/\1/p')
 if [[ -n "${1:-}" && $1 != status ]]; then
 	new=$1
+elif [[ -n "$in_progress" ]]; then
+	new=$in_progress
 elif [[ $current == *-dev ]]; then
 	new=${current%-dev}
 else
@@ -88,17 +98,8 @@ else
 fi
 tag=$(tag_name "$new")
 next=
-if [[ -n "${2:-}" ]]; then
-	next=$2
-elif [[ $new =~ ^(.*-[a-z]+\.)([0-9]+)$ ]]; then
-	# 3.0.0-beta.4 -> 3.0.0-beta.5
-	next=${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))
-elif [[ $new =~ ^([0-9]+\.[0-9]+\.)([0-9]+)$ ]]; then
-	# 1.1.2 -> 1.1.3-dev
-	next=${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))-dev
-else
-	die "cannot guess the version after $new: build-tools release $new NEXT_VERSION"
-fi
+next=${2:-}
+[[ -n "$next" ]] || next=$(next_version "$new") || die "cannot guess the version after $new: build-tools release $new NEXT_VERSION"
 
 # Where the release stands
 prepared=0
@@ -116,7 +117,7 @@ fi
 # A project with nothing under Unreleased and no release in progress has nothing to release: not an error
 if [[ $prepared == 0 ]] && ! { grep -qx '### Unreleased' CHANGELOG.md && [[ -n "$(changelog_section Unreleased | tr -d '[:space:]')" ]]; }; then
 	last=$(git describe --tags --abbrev=0 --match '[0-9]*' --match 'v[0-9]*' 2>/dev/null || echo none)
-	end 0 "$project: nothing to release, CHANGELOG.md has nothing under Unreleased (last release: $last). Write what changed, then run again."
+	end 0 "$project: nothing under Unreleased in CHANGELOG.md (last release: $last)"
 fi
 
 # The projects of the family this one requires (packaging/siblings), if any
@@ -165,11 +166,11 @@ fi
 require "$gh"
 [[ ! -f composer.json ]] || require composer php
 ! packaged || require nfpm
-"$gh" auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login): the GitHub release needs it"
+"$gh" auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login)"
 if packaged; then
-	[[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): its local clone, in the .env of the project"
+	[[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or has no conf/ (the local clone of the apt repository, in .env)"
 	for setting in APT_REPO_HOST APT_REPO_PATH; do
-		[[ -n "$(apt_setting $setting)" ]] || die "$setting is not set: in the .env of the project or of the apt repository"
+		[[ -n "$(apt_setting $setting)" ]] || die "$setting is not set (in .env, or in the one of the apt repository)"
 	done
 fi
 
@@ -182,7 +183,7 @@ key=
 if [[ $published == 0 ]] && packaged; then
 	key=$(signing_key)
 	if [[ -n "$key" ]]; then
-		log "Signing key $key: give its passphrase now, the publication needs it"
+		log "Signing key $key: passphrase needed"
 		sign_test() { echo "release $project $new" | gpg --local-user "$key" --clearsign >/dev/null; }
 		retry "The signature with the key $key" sign_test
 	fi
@@ -191,11 +192,12 @@ fi
 if [[ $prepared == 0 ]]; then
 	[[ -z "$(git tag -l "$new" "v$new")" ]] || die "the tag $new exists already"
 	trap restore ERR
-	echo "$new" >.version
+	set_version "$new"
 	"$BUILD_TOOLS/libexec/switch" release
 	awk -v title="### $new" '$0 == "### Unreleased" && !done {print title; done = 1; next} {print}' CHANGELOG.md >CHANGELOG.md.new
 	mv CHANGELOG.md.new CHANGELOG.md
-	git add .version CHANGELOG.md
+	git add CHANGELOG.md
+	[[ ! -f .version ]] || git add .version
 	[[ ! -f composer.json ]] || git add composer.json
 	[[ ! -f composer.lock ]] || git add composer.lock
 	# The release commit and the tag say the same: v<version>, then the lines of the changelog, verbatim
@@ -204,7 +206,7 @@ if [[ $prepared == 0 ]]; then
 fi
 
 if [[ $tag_local == 0 ]]; then
-	[[ $(git log -1 --format=%s) == "v$new" ]] || die "HEAD is not the release commit of $new (commits were added after it)"
+	[[ $(git log -1 --format=%s) == "v$new" ]] || die "commits after the release commit v$new"
 	if grep -q '"type": "path"' composer.json 2>/dev/null; then
 		die "composer.json still has local projects (build-tools switch release)"
 	fi
@@ -246,11 +248,11 @@ done < <(
 			if grep -q "Could not finish exporting" "$TMP.publish"; then
 				# The packages are in the database of reprepro but their indices are not signed: nobody sees them yet, only the
 				# export is to do again (apt-package would take them for published)
-				log "The packages are in the apt repository but their indices could not be signed, the repository looks as before"
+				log "Packages added, indices not signed"
 				retry "The export of the apt repository" reprepro -b "$(apt_repo_dir)" export
 				break
 			fi
-			yesno y "The publication failed, see above. Try again?" || die "the publication failed, stopped"
+			yesno y "Publication failed. Try again?" || die "publication failed, stopped"
 		done
 	fi
 )
@@ -277,18 +279,19 @@ fi
 "$gh" release upload "$tag" "${assets[@]}" -R "$repo" --clobber
 success "Published: https://github.com/$repo/releases/tag/$tag"
 
-# The next development version, unless it was already done
-if [[ $(version) != "$new" ]]; then
-	end 0 "$project $new is released, $(version) is already the version in progress."
+# The next development version, unless it was already done (something was committed after the release commit)
+if [[ $(git log -1 --format=%s) != "v$new" ]]; then
+	end 0 "$project $new released"
 fi
 trap restore ERR
-echo "$next" >.version
+[[ ! -f .version ]] || echo "$next" >.version
 "$BUILD_TOOLS/libexec/switch" dev
 awk 'BEGIN {done = 0} {print} /^## Changelog/ && !done {print ""; print "### Unreleased"; done = 1}' CHANGELOG.md >CHANGELOG.md.new
 mv CHANGELOG.md.new CHANGELOG.md
-git add .version CHANGELOG.md
+git add CHANGELOG.md
+[[ ! -f .version ]] || git add .version
 [[ ! -f composer.json ]] || git add composer.json
 [[ ! -f composer.lock ]] || git add composer.lock
 git commit -q -m "chore(version): $next${family:+, the family linked again}"
 trap - ERR
-success "$project $new is released. The version in progress is $next, committed here, not pushed: it goes with the next release."
+success "$project $new released, $next next (committed, not pushed)"

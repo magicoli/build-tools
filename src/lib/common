@@ -13,7 +13,8 @@ fi
 BASE_DIR=$BUILD_PROJECT
 # shellcheck disable=SC1091
 . "$_here/helpers"
-unset _here
+# (helpers sets BUILD_TOOLS and unsets _here, which it shares with this file)
+. "$BUILD_TOOLS/src/lib/version"
 
 cd "$BUILD_PROJECT"
 

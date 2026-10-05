@@ -35,3 +35,58 @@ function test_a_tagged_release_is_the_tag() {
     assert_equals "VERSION=2.0.0-beta.1
 DEB_VERSION=2.0.0~beta.1" "$out"
 }
+
+# A project with no .version: its version comes from composer.json when that is ahead of the last tag, else from the tags
+without_version_file() {
+    git -C "$PROJECT" rm -q .version
+    git -C "$PROJECT" commit -q -m "no .version"
+}
+
+function test_without_a_version_file_the_version_follows_the_last_tag() {
+    local out
+    without_version_file
+    git -C "$PROJECT" tag -a v1.0.0 -m "v1.0.0"
+    echo more >>"$PROJECT/README.md"
+    git -C "$PROJECT" commit -q -am "after the tag"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=1\.0\.1-dev\.[0-9]+\+g[0-9a-f]+" "$out"
+}
+
+function test_without_a_version_file_a_pre_release_tag_is_followed_by_the_next_number() {
+    local out
+    without_version_file
+    git -C "$PROJECT" tag -a 3.0.0-beta.4 -m "3.0.0-beta.4"
+    echo more >>"$PROJECT/README.md"
+    git -C "$PROJECT" commit -q -am "after the tag"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=3\.0\.0-beta\.5\.[0-9]+\+g[0-9a-f]+" "$out"
+}
+
+function test_the_version_of_composer_json_counts_when_it_is_ahead_of_the_last_tag() {
+    local out
+    without_version_file
+    git -C "$PROJECT" tag -a v1.0.0 -m "v1.0.0"
+    printf '{\n    "name": "a/b",\n    "version": "1.2.0"\n}\n' >"$PROJECT/composer.json"
+    git -C "$PROJECT" add composer.json
+    git -C "$PROJECT" commit -q -m "composer"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=1\.2\.0-dev\.[0-9]+\+g[0-9a-f]+" "$out"
+}
+
+function test_the_version_of_composer_json_is_not_news_when_it_is_the_last_tag() {
+    local out
+    without_version_file
+    git -C "$PROJECT" tag -a v1.0.0 -m "v1.0.0"
+    printf '{\n    "name": "a/b",\n    "version": "1.0.0"\n}\n' >"$PROJECT/composer.json"
+    git -C "$PROJECT" add composer.json
+    git -C "$PROJECT" commit -q -m "composer"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=1\.0\.1-dev\." "$out"
+}
+
+function test_no_version_anywhere_is_said() {
+    local out
+    without_version_file
+    out=$(cd "$PROJECT" && "$BT" version 2>&1)
+    assert_contains "no version" "$out"
+}

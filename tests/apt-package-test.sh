@@ -28,11 +28,20 @@ function test_it_builds_the_package_with_the_version_of_the_tag() {
     assert_contains "version: 1.2.3" "$(cat "$STUB_STATE/last-definition.yaml")"
 }
 
-function test_a_build_between_two_tags_carries_the_commits_and_the_hash() {
-    echo more >>"$PROJECT/README.md"
+function test_a_build_after_the_tag_is_the_version_in_progress_with_the_commits_and_the_hash() {
+    echo 1.2.4-dev >"$PROJECT/.version"
     git -C "$PROJECT" commit -q -am "after the tag"
     (cd "$PROJECT" && "$ROOT/bin/apt-package" >/dev/null 2>&1)
-    assert_matches "version: 1\.2\.3\+1\.g[0-9a-f]+" "$(cat "$STUB_STATE/last-definition.yaml")"
+    assert_matches "version: 1\.2\.4-dev\.[0-9]+\+g[0-9a-f]+" "$(cat "$STUB_STATE/last-definition.yaml")"
+}
+
+function test_the_package_has_the_version_of_the_zip_and_of_the_release() {
+    local version
+    echo 1.2.4-dev >"$PROJECT/.version"
+    git -C "$PROJECT" commit -q -am "after the tag"
+    version=$(cd "$PROJECT" && "$BT" version | sed -n 's/^VERSION=//p')
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" >/dev/null 2>&1)
+    assert_contains "version: $version" "$(cat "$STUB_STATE/last-definition.yaml")"
 }
 
 function test_it_does_not_publish_without_a_repository() {

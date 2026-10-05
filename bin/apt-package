@@ -65,7 +65,7 @@ done
 
 REPO_DIR=${APT_REPO_DIR:-}
 if $PUBLISH; then
-    [[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): the local clone of the repository to publish to, in the .env of the project"
+    [[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or has no conf/ (the local clone of the apt repository, in .env)"
     # Before publishing, bring this clone up to date and push its own commits:
     # the server and other machines publish to the same repository.
     git -C "$REPO_DIR" pull -q --rebase --autostash
@@ -101,38 +101,18 @@ project_version() {
     grep -qE '\$\{(DEB_)?VERSION\}' "$1"
 }
 
-# A build after a version tag, as git describe names it (1.2.3-5-g1a2b3c4, and
-# -dirty with local changes), becomes 1.2.3+5.g1a2b3c4[.dirty]: it must sort
-# after the tag, which 1.2.3~5-g1a2b3c4 (the ~ nfpm and dpkg give to the -) would not
-dev_version() {
-    local v=${1#v} dirty=
-    [[ "$v" != *-dirty ]] || { dirty=yes; v=${v%-dirty}; }
-    if [[ "$v" =~ ^(.+)-([0-9]+)-g([0-9a-f]+)$ ]]; then
-        v=${BASH_REMATCH[1]}+${BASH_REMATCH[2]}.g${BASH_REMATCH[3]}
-        [[ -z "$dirty" ]] || v+=.dirty
-    elif [[ -n "$dirty" ]]; then
-        v+=+dirty
-    fi
-    echo "$v"
-}
-
-# Version tags only (1.2.3, v1.2.3): a project may have other tags
-DESCRIBE=(git -C "$PROJECT_DIR" describe --tags --match '[0-9]*' --match 'v[0-9]*')
-TAG=
+# The version tag HEAD is on (1.2.3, v1.2.3), if any: a project may have other tags
+TAG=$(git -C "$PROJECT_DIR" describe --tags --exact-match --match '[0-9]*' --match 'v[0-9]*' 2>/dev/null || true)
 if $PUBLISH; then
     if ! git -C "$PROJECT_DIR" diff --quiet HEAD; then
         die "Publishing needs a clean tree."
     fi
-    if VERSION=$("${DESCRIBE[@]}" --exact-match 2>/dev/null); then
-        TAG=$VERSION
-    else
+    if [[ -z "$TAG" ]]; then
         for definition in "${CONFIGS[@]}"; do
             if project_version "$definition"; then
                 die "Publishing $(basename "$definition" .yaml) needs a version tag (git tag 1.2.3)."
             fi
         done
-        VERSION=$(dev_version "$("${DESCRIBE[@]}" 2>/dev/null)") ||
-            VERSION="0.0.0-$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
     fi
 
     # The GitHub remote and repository (owner/name) of the project, if any,
@@ -155,12 +135,10 @@ if $PUBLISH; then
             die "Push the tag to GitHub first: git push $GITHUB_REMOTE $TAG"
         fi
     fi
-else
-    VERSION=$(dev_version "$("${DESCRIBE[@]}" --dirty 2>/dev/null)") ||
-        VERSION="0.0.0-$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
 fi
-export VERSION="${VERSION#v}"
-export DEB_VERSION="${VERSION/-/\~}"
+# The version of the build is the one of the zip and of the release: one definition (libexec/version)
+eval "$("$BUILD_TOOLS/libexec/version")"
+export VERSION DEB_VERSION
 
 # nfpm.yaml paths are relative to the project root
 cd "$PROJECT_DIR"

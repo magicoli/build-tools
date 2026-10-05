@@ -42,6 +42,6 @@ retry() { # what, command...
     [[ -t 0 ]] || yes=
     until "$@"; do
         # shellcheck disable=SC2086
-        yesno $yes "$what failed, see above (a passphrase prompt left alone times out). Try again?" || die "$what failed, stopped"
+        yesno $yes "$what failed. Try again?" || die "$what failed, stopped"
     done
 }

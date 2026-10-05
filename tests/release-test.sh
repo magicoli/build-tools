@@ -50,11 +50,11 @@ function test_the_question_shows_one_report_of_what_will_be_published() {
     out=$(release "n
 ")
     assert_contains "preparing to publish demo 1.0.0" "$out"
-    assert_contains "tag:          1.0.0" "$out"
-    assert_contains "msg:          v1.0.0
-                - new: the first thing" "$out"
-    assert_contains "assets:       zip, deb (demo)" "$out"
-    assert_contains "publication:  host.example.test (stable), github.com/owner/demo" "$out"
+    assert_contains "  tag: 1.0.0" "$out"
+    assert_contains "  msg: v1.0.0
+       - new: the first thing" "$out"
+    assert_contains "  assets: zip, deb (demo)" "$out"
+    assert_contains "  targets: host.example.test (stable), github.com/owner/demo" "$out"
     assert_not_contains "to do" "$out"
     assert_not_contains "1.0.1-dev" "$out"
     assert_equals "1" "$(grep -c 'preparing to publish' <<<"$out")"
@@ -72,7 +72,7 @@ function test_the_report_says_what_a_previous_run_did() {
 function test_the_next_version_is_said_once_it_is_made() {
     local out
     out=$(release "")
-    assert_contains "The version in progress is 1.0.1-dev, committed here, not pushed" "$out"
+    assert_contains "demo 1.0.0 released, 1.0.1-dev next (committed, not pushed)" "$out"
 }
 
 function test_the_next_version_follows_and_the_changelog_has_a_new_unreleased_section() {
@@ -105,7 +105,7 @@ function test_nothing_under_unreleased_is_nothing_to_release_and_not_an_error() 
     git -C "$PROJECT" commit -q -am "nothing new"
     out=$(release "")
     status=$?
-    assert_contains "nothing to release" "$out"
+    assert_contains "nothing under Unreleased" "$out"
     assert_equals "0" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
 }
 
@@ -172,7 +172,7 @@ function test_it_refuses_changes_made_by_hand_and_says_so() {
     local out
     echo more >>"$PROJECT/README.md"
     out=$(release "")
-    assert_contains "commit or stash your changes first" "$out"
+    assert_contains "uncommitted changes" "$out"
 }
 
 function test_a_project_without_packages_is_released_as_a_zip_alone() {
@@ -181,13 +181,47 @@ function test_a_project_without_packages_is_released_as_a_zip_alone() {
     git -C "$PROJECT" commit -q -m "no package"
     unset APT_REPO_DIR
     out=$(release "")
-    assert_contains "assets:       zip
+    assert_contains "  assets: zip
 " "$out"
-    assert_contains "publication:  github.com/owner/demo" "$out"
+    assert_contains "  targets: github.com/owner/demo" "$out"
     assert_not_contains "deb" "$out"
     assert_not_contains "apt-package" "$(calls)"
     assert_not_contains "nfpm" "$(calls)"
     assert_not_contains "clearsign" "$(calls)"
     assert_contains "gh release upload 1.0.0 dist/demo-1.0.0.zip" "$(calls)"
     assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
+}
+
+# A project with no .version: the tags say the version, the release commit says a release is in progress
+function test_a_project_without_a_version_file_is_released_from_its_last_tag() {
+    git -C "$PROJECT" rm -q .version
+    git -C "$PROJECT" commit -q -m "no .version"
+    git -C "$PROJECT" tag -a 0.9.0 -m "0.9.0"
+    release "" >/dev/null
+    assert_contains "0.9.1" "$(git -C "$WORK/github.git" tag)"
+    assert_file_not_exists "$PROJECT/.version"
+    assert_equals "v0.9.1" "$(git -C "$WORK/github.git" log -1 --format=%s dev)"
+    assert_equals "chore(version): 0.9.2-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "### Unreleased
+### 0.9.1" "$(grep '^### ' "$PROJECT/CHANGELOG.md")"
+}
+
+function test_a_project_without_a_version_file_resumes_where_it_stopped() {
+    git -C "$PROJECT" rm -q .version
+    git -C "$PROJECT" commit -q -m "no .version"
+    git -C "$PROJECT" tag -a 0.9.0 -m "0.9.0"
+    FAIL_GH_CREATE=1 release "" >/dev/null
+    unset FAIL_GH_CREATE
+    release "" >/dev/null
+    assert_equals "2" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+    assert_equals "1" "$(git -C "$PROJECT" log --format=%s | grep -c '^v0.9.1$')"
+    assert_contains "gh release create 0.9.1" "$(calls)"
+}
+
+function test_it_refuses_without_a_changelog() {
+    local out
+    git -C "$PROJECT" rm -q CHANGELOG.md
+    git -C "$PROJECT" commit -q -m "no changelog"
+    out=$(release "")
+    assert_contains "no CHANGELOG.md" "$out"
 }

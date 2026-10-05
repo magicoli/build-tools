@@ -18,7 +18,7 @@ if [[ $mode != dev && $mode != release ]]; then
 fi
 names=$(awk '!/^#/ && NF {print $1}' packaging/siblings 2>/dev/null || true)
 if [[ -z "$names" ]]; then
-    end 0 "this project requires none of the family, nothing to switch"
+    end 0 "no sibling to switch"
 fi
 
 # The files of a project changed since a release that are in its packages (not the version, the changelog, composer,
@@ -113,7 +113,7 @@ until output=$(composer update $names --no-interaction 2>&1); do
         echo "$output" >&2
         die "composer could not update $names"
     fi
-    log "Composer cannot resolve the versions yet ($((end - SECONDS)) s left before giving up): $(grep -m1 -iE 'problem|could not|cannot|error' <<<"$output" | cut -c1-200)"
+    log "composer: versions not found yet ($((end - SECONDS)) s left): $(grep -m1 -iE 'problem|could not|cannot|error' <<<"$output" | cut -c1-200)"
     sleep 20
 done
 success "composer.json and composer.lock: $mode"

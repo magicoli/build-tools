@@ -2,6 +2,9 @@
 
 ### Unreleased
 
+- new: `.version` is optional, the version follows the last tag, or composer.json when it is ahead
+- update: the packages, the zip and the release have one version, from `build-tools version`
+- update: shorter messages
 - fix: the release asks the passphrase on the terminal, gpg did not find it (Inappropriate ioctl)
 - fix: with no terminal, a failed signature stops instead of asking again for ever
 - update: the release shows what it will publish in one report, says the next version once it is made

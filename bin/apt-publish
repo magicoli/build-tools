@@ -25,14 +25,14 @@ BASE_DIR=/dev/null
 source "$(dirname "$(realpath "$0")")/../src/lib/helpers"
 
 REPO_DIR=${APT_REPO_DIR:-}
-[[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): the local clone of the repository, in the .env of the project"
+[[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or has no conf/ (the local clone of the apt repository, in .env)"
 
 APT_REPO_HOST=$(apt_setting APT_REPO_HOST)
 APT_REPO_PATH=$(apt_setting APT_REPO_PATH)
 APT_REPO_DIST=$(apt_setting APT_REPO_DIST)
 APT_REPO_DIST=${APT_REPO_DIST:-stable}
-[[ -n "$APT_REPO_HOST" ]] || die "APT_REPO_HOST is not set: the ssh host serving the repository, in the .env of the project or of the repository"
-[[ -n "$APT_REPO_PATH" ]] || die "APT_REPO_PATH is not set: the clone of the repository on that host, in the .env of the project or of the repository"
+[[ -n "$APT_REPO_HOST" ]] || die "APT_REPO_HOST is not set (the ssh host serving the repository, in .env or in the one of the repository)"
+[[ -n "$APT_REPO_PATH" ]] || die "APT_REPO_PATH is not set (the clone of the repository on that host, in .env or in the one of the repository)"
 
 resume=false
 if [[ ${1:-} == --resume ]]; then
@@ -56,7 +56,7 @@ if [[ $resume == false ]]; then
     if [[ $status != 0 ]]; then
         if grep -q "Could not finish exporting" "$TMP.reprepro"; then
             # The packages are in the database but the indices are not signed: only the export is to do again
-            log "The packages are added to the repository, but its indices could not be signed (did the passphrase prompt time out?)"
+            log "Packages added, indices not signed"
             retry "The export of the indices" reprepro -b "$REPO_DIR" export
         else
             die "reprepro failed, see above"
