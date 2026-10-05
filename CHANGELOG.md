@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.1.4
 
 - new: an executable `packaging/build-zip` in the project overrides the generic one
