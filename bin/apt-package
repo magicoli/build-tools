@@ -180,11 +180,7 @@ dist_of() {
     file=$(basename "$1" .deb)
     version=${file#*_}
     version=${version%_*}
-    if [[ "$version" == *~* && -n "${APT_REPO_PRERELEASE_DIST:-}" ]]; then
-        echo "$APT_REPO_PRERELEASE_DIST"
-    else
-        echo "${APT_REPO_DIST:-stable}"
-    fi
+    apt_dist_of "$version"
 }
 
 # Whether the repository already has this package file (name_version_arch.deb)
@@ -236,11 +232,6 @@ if $PUBLISH; then
     if [[ ${#DEBS[@]} -eq 0 ]]; then
         echo "Nothing to publish."
         exit 0
-    fi
-
-    # The passphrase prompt needs the terminal
-    if tty -s; then
-        export GPG_TTY=$(tty)
     fi
 
     # One call of apt-publish by suite; it updates the clone again, right before changing it

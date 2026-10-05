@@ -25,12 +25,23 @@ set +e
 [[ -z "$_errexit" ]] || set -e
 unset _helpers _errexit
 
+# The passphrase prompt of gpg needs the terminal, which gpg cannot find when its input is a pipe
+if tty -s; then
+    GPG_TTY=$(tty)
+    export GPG_TTY
+fi
+
+source "$BUILD_TOOLS/src/lib/apt"
+
 # What needs the passphrase of a key fails when nobody answers the prompt in time (nobody stays in front of the screen
-# for a release): the failure is said, and trying again is offered, as long as wanted
+# for a release): the failure is said, and trying again is offered, as long as wanted. Without a terminal nobody can answer:
+# an answer that does not come is a no, not a loop
 retry() { # what, command...
-    local what=$1
+    local what=$1 yes=y
     shift
+    [[ -t 0 ]] || yes=
     until "$@"; do
-        yesno y "$what failed (the passphrase prompt may have timed out). Try again?" || die "$what failed, stopped"
+        # shellcheck disable=SC2086
+        yesno $yes "$what failed, see above (a passphrase prompt left alone times out). Try again?" || die "$what failed, stopped"
     done
 }

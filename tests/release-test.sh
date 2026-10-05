@@ -37,10 +37,42 @@ function test_the_release_commit_and_the_tag_are_the_version_then_the_changelog(
     assert_equals "$body" "$(git -C "$PROJECT" tag -l --format='%(contents:body)' 1.0.0 | sed '/^$/d;$!b' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')" || true
 }
 
-function test_the_tag_and_the_branch_are_pushed() {
+function test_the_tag_and_the_branch_are_pushed_but_not_the_next_version() {
     release "" >/dev/null
     assert_contains "1.0.0" "$(git -C "$WORK/github.git" tag)"
-    assert_equals "$(git -C "$PROJECT" rev-parse HEAD)" "$(git -C "$WORK/github.git" rev-parse dev)"
+    assert_equals "v1.0.0" "$(git -C "$WORK/github.git" log -1 --format=%s dev)"
+    assert_equals "chore(version): 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
+}
+
+function test_the_question_shows_one_report_of_what_will_be_published() {
+    local out
+    unset RELEASE_YES
+    out=$(release "n
+")
+    assert_contains "preparing to publish demo 1.0.0" "$out"
+    assert_contains "tag:          1.0.0" "$out"
+    assert_contains "msg:          v1.0.0
+                - new: the first thing" "$out"
+    assert_contains "assets:       zip, deb (demo)" "$out"
+    assert_contains "publication:  host.example.test (stable), github.com/owner/demo" "$out"
+    assert_not_contains "to do" "$out"
+    assert_not_contains "1.0.1-dev" "$out"
+    assert_equals "1" "$(grep -c 'preparing to publish' <<<"$out")"
+}
+
+function test_the_report_says_what_a_previous_run_did() {
+    local out
+    FAIL_GH_CREATE=1 release "" >/dev/null
+    unset RELEASE_YES FAIL_GH_CREATE
+    out=$(release "n
+")
+    assert_contains "already done: release commit, tag, pushed to github" "$out"
+}
+
+function test_the_next_version_is_said_once_it_is_made() {
+    local out
+    out=$(release "")
+    assert_contains "The version in progress is 1.0.1-dev, committed here, not pushed" "$out"
 }
 
 function test_the_next_version_follows_and_the_changelog_has_a_new_unreleased_section() {
@@ -98,6 +130,15 @@ function test_it_resumes_where_it_stopped() {
     assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
 }
 
+function test_nobody_to_answer_is_a_no_and_not_a_loop() {
+    local out
+    export GPG_FAIL_FIRST=100
+    out=$(release "")
+    assert_contains "failed, stopped" "$out"
+    assert_equals "1" "$(grep -c 'clearsign' "$STUB_LOG")"
+    assert_equals "0" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+}
+
 function test_a_passphrase_prompt_that_times_out_is_offered_again() {
     local out
     export GPG_FAIL_FIRST=1
@@ -140,7 +181,10 @@ function test_a_project_without_packages_is_released_as_a_zip_alone() {
     git -C "$PROJECT" commit -q -m "no package"
     unset APT_REPO_DIR
     out=$(release "")
-    assert_contains "zip, publication: GitHub release with the zip" "$out"
+    assert_contains "assets:       zip
+" "$out"
+    assert_contains "publication:  github.com/owner/demo" "$out"
+    assert_not_contains "deb" "$out"
     assert_not_contains "apt-package" "$(calls)"
     assert_not_contains "nfpm" "$(calls)"
     assert_not_contains "clearsign" "$(calls)"

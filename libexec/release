@@ -3,11 +3,12 @@
 # again, it does what remains. The projects of the family are released in the order of their dependencies (rest-php,
 # engine, helpers, kit): each one needs the previous one published.
 #
-#   build-tools release [VERSION]   the whole release, after one question: the release commit (.version, the family required
-#                              by version, CHANGELOG; its message is v<version> then the changelog, verbatim, like the
-#                              message of the tag), the tag, the push to RELEASE_REMOTE (github), the zip, the
-#                              publication (apt repository, GitHub release with the Debian packages and the zip; a project
-#                              with no packaging/*.yaml has the zip alone), then the next development version, pushed
+#   build-tools release [VERSION]   the whole release, after one question that shows what will be published: the release
+#                              commit (.version, the family required by version, CHANGELOG; its message is v<version>
+#                              then the changelog, verbatim, like the message of the tag), the tag, the push to
+#                              RELEASE_REMOTE (github), the zip, the publication (apt repository, GitHub release with the
+#                              Debian packages and the zip; a project with no packaging/*.yaml has the zip alone), then
+#                              the next development version, committed here and not pushed: it goes with the next release
 #   build-tools release status      what is done and what remains
 #
 # VERSION is the version to release, by default the development version without -dev, or the version of .version when it
@@ -73,9 +74,6 @@ signing_key() {
 restore() {
     git checkout -q -- .version CHANGELOG.md composer.json composer.lock 2>/dev/null || true
 }
-plan_item() { # done|todo, what
-    if [[ $1 == done ]]; then success "done: $2"; else log "to do: $2"; fi
-}
 
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "commit or stash your changes first. A release leaves nothing uncommitted, these were made by hand:
 $(git status --short --untracked-files=no)"
@@ -125,18 +123,36 @@ fi
 family=
 [[ -z "$(awk '!/^#/ && NF' packaging/siblings 2>/dev/null)" ]] || family=1
 
+# What is about to be published, in one report; what a previous run already did is said on one line
 show_plan() {
-    log "$project $new (tag $tag), then $next"
-    [[ $prepared == 1 ]] && plan_item done "release commit" || plan_item todo "release commit: .version, the family by version, CHANGELOG"
-    [[ $tag_local == 1 ]] && plan_item done "tag $tag" || plan_item todo "tag $tag"
-    [[ $tag_remote == 1 ]] && plan_item done "pushed to $remote" || plan_item todo "push to $remote"
-    if packaged; then
-        what="zip, Debian packages, publication: apt repository, GitHub release with the packages and the zip"
-    else
-        what="zip, publication: GitHub release with the zip"
+    local lines assets=zip publication=github.com/$repo steps=() report done_steps
+    if [[ $published == 1 ]]; then
+        log "$project $new is published: https://github.com/$repo/releases/tag/$tag"
+        return
     fi
-    [[ $published == 1 ]] && plan_item done "published (GitHub release with the zip)" || plan_item todo "$what"
-    [[ $tag_local == 1 && $current != "$new" ]] && plan_item done "next version $current" || plan_item todo "next version $next, ${family:+the family linked again, }pushed"
+    if [[ $prepared == 1 ]]; then
+        lines=$(changelog_section "$new")
+    else
+        lines=$(changelog_section Unreleased)
+    fi
+    if packaged; then
+        assets+=", deb ($(sed -n 's/^name: *//p' packaging/*.yaml | paste -sd, - | sed 's/,/, /g'))"
+        publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "$new")), $publication"
+    fi
+    report="preparing to publish $project $new"
+    report+=$'\n'$(printf '  %-13s %s' "tag:" "$tag")
+    report+=$'\n'$(printf '  %-13s %s' "msg:" "v$new")
+    [[ -z "$lines" ]] || report+=$'\n'$(sed 's/^/                /' <<<"$lines")
+    report+=$'\n'$(printf '  %-13s %s' "assets:" "$assets")
+    report+=$'\n'$(printf '  %-13s %s' "publication:" "$publication")
+    [[ $prepared == 0 ]] || steps+=("release commit")
+    [[ $tag_local == 0 ]] || steps+=("tag")
+    [[ $tag_remote == 0 ]] || steps+=("pushed to $remote")
+    if [[ ${#steps[@]} -gt 0 ]]; then
+        done_steps=$(printf ', %s' "${steps[@]}")
+        report+=$'\n'$(printf '  %-13s %s' "already done:" "${done_steps:2}")
+    fi
+    log "$report"
 }
 
 if [[ ${1:-} == status ]]; then
@@ -150,10 +166,15 @@ require "$gh"
 [[ ! -f composer.json ]] || require composer php
 ! packaged || require nfpm
 "$gh" auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login): the GitHub release needs it"
-! packaged || [[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): its local clone, in the .env of the project"
+if packaged; then
+    [[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): its local clone, in the .env of the project"
+    for setting in APT_REPO_HOST APT_REPO_PATH; do
+        [[ -n "$(apt_setting $setting)" ]] || die "$setting is not set: in the .env of the project or of the apt repository"
+    done
+fi
 
 show_plan
-[[ -n "${RELEASE_YES:-}" ]] || yesno "Go on?" || die "stopped, nothing done"
+[[ $published == 1 || -n "${RELEASE_YES:-}" ]] || yesno "Proceed?" || die "stopped, nothing done"
 
 # The packages are signed with a key whose passphrase is asked: asked now, while you are here and before anything is
 # pushed, and kept by the agent for the publication (a prompt left alone times out, and the publication stops half done)
@@ -191,8 +212,11 @@ if [[ $tag_local == 0 ]]; then
     git tag -a "$tag" -m "v$new" -m "$(changelog_section "$new")"
 fi
 
-git push "$remote" "$branch"
-[[ $tag_remote == 1 ]] || git push "$remote" "$tag"
+# The branch and the tag go together; the release commit is the last of the branch here, the next version is not pushed
+if [[ $tag_remote == 0 ]]; then
+    git push "$remote" "$branch"
+    git push "$remote" "$tag"
+fi
 
 # The tagged commit is built and published in a folder of its own, whatever the current commit is. It has the files git
 # does not hold that a build needs (.env, src, dist, build, vendor, the submodules), linked to those of this folder
@@ -267,5 +291,4 @@ git add .version CHANGELOG.md
 [[ ! -f composer.lock ]] || git add composer.lock
 git commit -q -m "chore(version): $next${family:+, the family linked again}"
 trap - ERR
-git push "$remote" "$branch"
-success "$project $new is released, now at $next."
+success "$project $new is released. The version in progress is $next, committed here, not pushed: it goes with the next release."

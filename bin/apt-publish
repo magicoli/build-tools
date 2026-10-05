@@ -27,14 +27,9 @@ source "$(dirname "$(realpath "$0")")/../src/lib/helpers"
 REPO_DIR=${APT_REPO_DIR:-}
 [[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): the local clone of the repository, in the .env of the project"
 
-# Value of a setting in the .env of the repository, if any
-env_default() {
-    [[ -f "$REPO_DIR/.env" ]] || return 0
-    (source "$REPO_DIR/.env" && echo "${!1:-}")
-}
-for setting in APT_REPO_HOST APT_REPO_PATH APT_REPO_DIST; do
-    [[ -n "${!setting:-}" ]] || printf -v "$setting" '%s' "$(env_default "$setting")"
-done
+APT_REPO_HOST=$(apt_setting APT_REPO_HOST)
+APT_REPO_PATH=$(apt_setting APT_REPO_PATH)
+APT_REPO_DIST=$(apt_setting APT_REPO_DIST)
 APT_REPO_DIST=${APT_REPO_DIST:-stable}
 [[ -n "$APT_REPO_HOST" ]] || die "APT_REPO_HOST is not set: the ssh host serving the repository, in the .env of the project or of the repository"
 [[ -n "$APT_REPO_PATH" ]] || die "APT_REPO_PATH is not set: the clone of the repository on that host, in the .env of the project or of the repository"
@@ -54,12 +49,6 @@ fi
 # repository, and reprepro's database cannot be merged afterwards
 git -C "$REPO_DIR" pull -q --rebase --autostash
 git -C "$REPO_DIR" push -q
-
-# The passphrase prompt needs the terminal
-if tty -s; then
-    GPG_TTY=$(tty)
-    export GPG_TTY
-fi
 
 if [[ $resume == false ]]; then
     reprepro -b "$REPO_DIR" includedeb "$APT_REPO_DIST" "$@" 2>&1 | tee "$TMP.reprepro"

@@ -66,8 +66,10 @@ no default repository: a project that publishes says where, and different projec
 The host, the path and the suites can also be in the `.env` of the apt repository itself, shared by the projects that publish to
 it; the one of the project wins.
 
-A release asks one question, then signs: the passphrase of the key is asked first, and when a prompt times out because nobody
-was there, the failure is said and trying again is offered.
+A release shows what it will publish (tag, message, assets, publication) and asks one question, one key. It then asks the
+passphrase of the key, before anything is pushed; when a prompt times out because nobody was there, the failure is said and
+trying again is offered (with no terminal to answer, it stops). The next development version is committed, not pushed: it goes
+with the next release.
 
 ## Tests
 
