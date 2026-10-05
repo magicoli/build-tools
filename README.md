@@ -34,10 +34,12 @@ A project keeps two small scripts where one looks for them, `dev/build.sh` and `
 
 ```bash
 #!/usr/bin/env bash
-exec "$(dirname "$0")/../vendor/bin/build-tools" release "$@"
+tool="$(dirname "$0")/../vendor/bin/build-tools"
+[[ -x "$tool" ]] || { echo "build-tools is not installed: composer install" >&2; exit 1; }
+exec "$tool" release "$@"
 ```
 
-(`build` for `dev/build.sh`.) This project has the same two, calling its own `bin/build-tools`.
+(`build` for `dev/build.sh`, `switch` for `dev/switch.sh` in a project that requires others of its family.) This project has the same two, calling its own `bin/build-tools`.
 
 ## What a project provides
 
