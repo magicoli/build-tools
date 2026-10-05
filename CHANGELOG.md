@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.0
 
 - new: `build-tools build|release|switch|stage|version|zip`, from the scripts the projects copied
 - new: `apt-package` and `apt-publish`, out of the apt repository: the repository, the host and the paths are settings
