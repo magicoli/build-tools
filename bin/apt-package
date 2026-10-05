@@ -142,6 +142,8 @@ export VERSION DEB_VERSION
 
 # nfpm.yaml paths are relative to the project root
 cd "$PROJECT_DIR"
+# What a build gives to the definitions is made by this build: a file left by a former one would give its version
+rm -f build/packaging.env
 [[ ! -x packaging/build ]] || packaging/build "${NAMES[@]}"
 # Variables the build gives to the definitions
 if [[ -f build/packaging.env ]]; then

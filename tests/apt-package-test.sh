@@ -44,6 +44,14 @@ function test_the_package_has_the_version_of_the_zip_and_of_the_release() {
     assert_contains "version: $version" "$(cat "$STUB_STATE/last-definition.yaml")"
 }
 
+function test_a_file_left_by_a_former_build_does_not_give_its_version() {
+    mkdir -p "$PROJECT/build"
+    printf 'VERSION=9.9.9\nDEB_VERSION=9.9.9\n' >"$PROJECT/build/packaging.env"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" >/dev/null 2>&1)
+    assert_file_exists "$PROJECT/dist/demo_1.2.3_all.deb"
+    assert_contains "version: 1.2.3" "$(cat "$STUB_STATE/last-definition.yaml")"
+}
+
 function test_it_does_not_publish_without_a_repository() {
     local out
     unset APT_REPO_DIR

@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- fix: a `build/packaging.env` left by a former build no longer gives its version to the package
+
 ### 0.1.1
 
 - new: `release patch|minor|major|stable|dev|alpha|beta|rc|X.Y.Z-rung.N`, from the last release
