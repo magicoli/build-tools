@@ -54,10 +54,16 @@ function test_a_setting_comes_from_the_environment_else_from_the_repository() {
 function test_the_prereleases_go_to_their_suite_when_the_repository_has_one() {
     export APT_REPO_DIR="$APT"
     assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3" </dev/null)"
-    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3-beta.1" </dev/null)"
+    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3~beta.1" </dev/null)"
     assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3~beta.1" </dev/null)"
-    assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3-beta.1" </dev/null)"
+    assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.4~dev.5+gabc" </dev/null)"
     assert_equals "stable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3" </dev/null)"
+}
+
+function test_the_revision_of_debian_is_not_a_pre_release() {
+    export APT_REPO_DIR="$APT"
+    assert_equals "stable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 0.9.3.0-1" </dev/null)"
+    assert_equals "stable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 88-1" </dev/null)"
 }
 
 function test_a_pre_release_stays_in_its_series_and_a_stable_one_moves_on() {

@@ -2,7 +2,8 @@
 
 ### Unreleased
 
-- fix: the release report lists only the packages that carry the version of the project
+- fix: the report of a release lists the packages that carry its version, and says the others may be published too
+- fix: a revision of Debian (`0.9.3.0-1`) is no pre-release: its package stays in the suite of the releases
 
 ### 0.1.4
 

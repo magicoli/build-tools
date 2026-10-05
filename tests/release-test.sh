@@ -285,5 +285,6 @@ function test_the_report_lists_the_packages_that_carry_the_version_of_the_projec
     out=$(release "n
 ")
     assert_contains "  assets: zip, deb (demo)" "$out"
-    assert_not_contains "other" "$out"
+    assert_contains "  also: other (if their version is new)" "$out"
+    assert_not_contains "OTHER_VERSION" "$out"
 }

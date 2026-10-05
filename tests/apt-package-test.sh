@@ -72,6 +72,17 @@ function test_the_prereleases_go_to_their_own_suite() {
     assert_contains "apt-publish dist=unstable pre-one_2.0.0~beta.1_all.deb" "$(calls)"
 }
 
+function test_a_revision_of_debian_stays_in_the_suite_of_the_releases() {
+    printf 'name: rev-one\narch: all\nversion: 0.9.3.0-1\n' >"$PROJECT/packaging/rev-one.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "a package with a revision"
+    git -C "$PROJECT" tag -a v1.2.5 -m "v1.2.5"
+    export APT_REPO_PRERELEASE_DIST=unstable
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains "rev-one_0.9.3.0-1_all.deb" "$(grep 'dist=stable ' "$STUB_LOG")"
+    assert_not_contains "rev-one" "$(grep 'dist=unstable ' "$STUB_LOG" || true)"
+}
+
 function test_without_a_prerelease_suite_all_go_to_the_same_one() {
     printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
     git -C "$PROJECT" add -A

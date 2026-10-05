@@ -79,12 +79,19 @@ apt_repo_dir() {
 signing_key() {
 	awk '$1 == "SignWith:" {print $2; exit}' "$(apt_repo_dir)/conf/distributions" 2>/dev/null || true
 }
-# The packages that carry the version of the project: the others (OpenSimulator, its modules...) have their own, and
-# a release only publishes them when that version is new
+# The packages that carry the version of the project, and the others (OpenSimulator, its modules...), which have their own:
+# a release publishes the others too when their version is new, only the first ones go to the GitHub release
 carrying_version() {
 	local definition
 	for definition in packaging/*.yaml; do
-		grep -qE '\$\{(DEB_)?VERSION\}' "$definition" && sed -n 's/^name: *//p' "$definition" | head -1
+		grep -qE '\$\{(DEB_)?VERSION\}' "$definition" && basename "$definition" .yaml
+	done
+	return 0
+}
+own_version() {
+	local definition
+	for definition in packaging/*.yaml; do
+		grep -qE '\$\{(DEB_)?VERSION\}' "$definition" || basename "$definition" .yaml
 	done
 	return 0
 }
@@ -146,7 +153,7 @@ family=
 
 # What is about to be published, in one report; what a previous run already did is said on one line
 show_plan() {
-	local lines assets=zip publication=github.com/$repo steps=() report done_steps names
+	local lines assets=zip publication=github.com/$repo steps=() report done_steps names others=
 	if [[ $published == 1 ]]; then
 		log "$project $new is published: https://github.com/$repo/releases/tag/$tag"
 		return
@@ -159,7 +166,8 @@ show_plan() {
 	if packaged; then
 		names=$(carrying_version | paste -sd, - | sed 's/,/, /g')
 		[[ -z "$names" ]] || assets+=", deb ($names)"
-		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "$new")), $publication"
+		others=$(own_version | paste -sd, - | sed 's/,/, /g')
+		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "${new/-/\~}")), $publication"
 	fi
 	report="preparing to publish $project $new"
 	report+=$'\n'$(printf '  %s %s' "tag:" "$tag")
@@ -167,6 +175,7 @@ show_plan() {
 	[[ -z "$lines" ]] || report+=$'\n'$(sed 's/^/       /' <<<"$lines")
 	report+=$'\n'$(printf '  %s %s' "assets:" "$assets")
 	report+=$'\n'$(printf '  %s %s' "targets:" "$publication")
+	[[ -z "$others" ]] || report+=$'\n'$(printf '  %s %s (if their version is new)' "also:" "$others")
 	[[ $prepared == 0 ]] || steps+=("release commit")
 	[[ $tag_local == 0 ]] || steps+=("tag")
 	[[ $tag_remote == 0 ]] || steps+=("pushed to $remote")

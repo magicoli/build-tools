@@ -15,12 +15,13 @@ apt_setting() { # name
     )
 }
 
-# The suite a version goes to: the pre-releases (1.2.3~beta.1 as a package, 1.2.3-beta.1 as a tag) to
-# APT_REPO_PRERELEASE_DIST when the repository has one, the others to APT_REPO_DIST (default stable)
-apt_dist_of() { # version
+# The suite a package version goes to: the pre-releases (a ~ in the version of a package, 1.2.3~beta.1) to
+# APT_REPO_PRERELEASE_DIST when the repository has one, the others to APT_REPO_DIST (default stable). A - is the revision
+# of Debian (0.9.3.0-1), not a pre-release: the version of a tag (1.2.3-beta.1) is made one first, 1.2.3~beta.1
+apt_dist_of() { # package version
     local pre
     pre=$(apt_setting APT_REPO_PRERELEASE_DIST)
-    if [[ ($1 == *~* || $1 == *-*) && -n "$pre" ]]; then
+    if [[ $1 == *~* && -n "$pre" ]]; then
         echo "$pre"
     else
         pre=$(apt_setting APT_REPO_DIST)
