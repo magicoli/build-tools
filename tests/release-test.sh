@@ -11,6 +11,7 @@ function set_up() {
     make_stubs
     make_apt_repo
     make_project 1.0.0-dev
+    add_packaging
 }
 function tear_down() {
     drop_work
@@ -45,7 +46,7 @@ function test_the_tag_and_the_branch_are_pushed() {
 function test_the_next_version_follows_and_the_changelog_has_a_new_unreleased_section() {
     release "" >/dev/null
     assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
-    assert_equals "chore(version): 1.0.1-dev, the family linked again" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "chore(version): 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
     assert_equals "### Unreleased
 ### 1.0.0" "$(grep '^### ' "$PROJECT/CHANGELOG.md")"
 }
@@ -131,4 +132,18 @@ function test_it_refuses_changes_made_by_hand_and_says_so() {
     echo more >>"$PROJECT/README.md"
     out=$(release "")
     assert_contains "commit or stash your changes first" "$out"
+}
+
+function test_a_project_without_packages_is_released_as_a_zip_alone() {
+    local out
+    git -C "$PROJECT" rm -q -r packaging
+    git -C "$PROJECT" commit -q -m "no package"
+    unset APT_REPO_DIR
+    out=$(release "")
+    assert_contains "zip, publication: GitHub release with the zip" "$out"
+    assert_not_contains "apt-package" "$(calls)"
+    assert_not_contains "nfpm" "$(calls)"
+    assert_not_contains "clearsign" "$(calls)"
+    assert_contains "gh release upload 1.0.0 dist/demo-1.0.0.zip" "$(calls)"
+    assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
 }

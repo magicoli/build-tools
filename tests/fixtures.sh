@@ -160,6 +160,14 @@ make_project() { # version
     export BUILD_NAME=demo RELEASE_GITHUB_REPO=owner/demo RELEASE_YES=1 APT_PACKAGE="$WORK/bin/apt-package-stub"
 }
 
+# The project has a Debian package, as the definition of packaging/demo.yaml
+add_packaging() {
+    mkdir -p "$PROJECT/packaging"
+    printf 'name: demo\nversion: ${DEB_VERSION}\nversion_schema: semver\narch: all\n' >"$PROJECT/packaging/demo.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "a package"
+}
+
 new_work() {
     WORK=$(mktemp -d "${TMPDIR:-/tmp}/build-tools-test.XXXXXX")
     export HOME_TEST="$WORK"

@@ -6,8 +6,8 @@
 #   build-tools release [VERSION]   the whole release, after one question: the release commit (.version, the family required
 #                              by version, CHANGELOG; its message is v<version> then the changelog, verbatim, like the
 #                              message of the tag), the tag, the push to RELEASE_REMOTE (github), the zip, the
-#                              publication (apt repository, GitHub release with the Debian packages and the zip), then the
-#                              next development version, pushed
+#                              publication (apt repository, GitHub release with the Debian packages and the zip; a project
+#                              with no packaging/*.yaml has the zip alone), then the next development version, pushed
 #   build-tools release status      what is done and what remains
 #
 # VERSION is the version to release, by default the development version without -dev, or the version of .version when it
@@ -52,6 +52,10 @@ github_repo() {
         return
     }
     git remote get-url "$remote" | sed -nE 's#^(git@github\.com:|https?://([^@/]+@)?github\.com/|ssh://git@github\.com/)(.+)$#\3#p' | sed 's/\.git$//'
+}
+# Whether the project has Debian packages (packaging/*.yaml): without, it is released as a zip, with no apt repository
+packaged() {
+    ls packaging/*.yaml >/dev/null 2>&1
 }
 # The packages are made and published by apt-package, of this repository (APT_PACKAGE for another)
 apt_package() {
@@ -117,14 +121,22 @@ if [[ $prepared == 0 ]] && ! { grep -qx '### Unreleased' CHANGELOG.md && [[ -n "
     end 0 "$project: nothing to release, CHANGELOG.md has nothing under Unreleased (last release: $last). Write what changed, then run again."
 fi
 
+# The projects of the family this one requires (packaging/siblings), if any
+family=
+[[ -z "$(awk '!/^#/ && NF' packaging/siblings 2>/dev/null)" ]] || family=1
+
 show_plan() {
     log "$project $new (tag $tag), then $next"
     [[ $prepared == 1 ]] && plan_item done "release commit" || plan_item todo "release commit: .version, the family by version, CHANGELOG"
     [[ $tag_local == 1 ]] && plan_item done "tag $tag" || plan_item todo "tag $tag"
     [[ $tag_remote == 1 ]] && plan_item done "pushed to $remote" || plan_item todo "push to $remote"
-    [[ $published == 1 ]] && plan_item done "published (GitHub release with the zip)" ||
-        plan_item todo "zip, Debian packages, publication: apt repository, GitHub release with the packages and the zip"
-    [[ $tag_local == 1 && $current != "$new" ]] && plan_item done "next version $current" || plan_item todo "next version $next, the family linked again, pushed"
+    if packaged; then
+        what="zip, Debian packages, publication: apt repository, GitHub release with the packages and the zip"
+    else
+        what="zip, publication: GitHub release with the zip"
+    fi
+    [[ $published == 1 ]] && plan_item done "published (GitHub release with the zip)" || plan_item todo "$what"
+    [[ $tag_local == 1 && $current != "$new" ]] && plan_item done "next version $current" || plan_item todo "next version $next, ${family:+the family linked again, }pushed"
 }
 
 if [[ ${1:-} == status ]]; then
@@ -134,10 +146,11 @@ fi
 
 # What is needed, before anything is done
 [[ -n "$repo" ]] || die "the remote $remote is not a GitHub repository (RELEASE_REMOTE=name)"
-require "$gh" nfpm
+require "$gh"
 [[ ! -f composer.json ]] || require composer php
+! packaged || require nfpm
 "$gh" auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login): the GitHub release needs it"
-[[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): its local clone, in the .env of the project"
+! packaged || [[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or is not an apt repository (conf/distributions): its local clone, in the .env of the project"
 
 show_plan
 [[ -n "${RELEASE_YES:-}" ]] || yesno "Go on?" || die "stopped, nothing done"
@@ -145,7 +158,7 @@ show_plan
 # The packages are signed with a key whose passphrase is asked: asked now, while you are here and before anything is
 # pushed, and kept by the agent for the publication (a prompt left alone times out, and the publication stops half done)
 key=
-if [[ $published == 0 ]]; then
+if [[ $published == 0 ]] && packaged; then
     key=$(signing_key)
     if [[ -n "$key" ]]; then
         log "Signing key $key: give its passphrase now, the publication needs it"
@@ -202,18 +215,20 @@ done < <(
 (
     cd "$work"
     "$BUILD_TOOLS/libexec/build" zip
-    # The packages are published by apt-package: the apt repository, and the GitHub release (created from the tag, with
-    # the packages and their signed checksums)
-    until "$(apt_package)" --publish 2>&1 | tee "$TMP.publish" && [[ ${PIPESTATUS[0]} == 0 ]]; do
-        if grep -q "Could not finish exporting" "$TMP.publish"; then
-            # The packages are in the database of reprepro but their indices are not signed: nobody sees them yet, only the
-            # export is to do again (apt-package would take them for published)
-            log "The packages are in the apt repository but their indices could not be signed, the repository looks as before"
-            retry "The export of the apt repository" reprepro -b "$(apt_repo_dir)" export
-            break
-        fi
-        yesno y "The publication failed, see above. Try again?" || die "the publication failed, stopped"
-    done
+    if packaged; then
+        # The packages are published by apt-package: the apt repository, and the GitHub release (created from the tag, with
+        # the packages and their signed checksums)
+        until "$(apt_package)" --publish 2>&1 | tee "$TMP.publish" && [[ ${PIPESTATUS[0]} == 0 ]]; do
+            if grep -q "Could not finish exporting" "$TMP.publish"; then
+                # The packages are in the database of reprepro but their indices are not signed: nobody sees them yet, only the
+                # export is to do again (apt-package would take them for published)
+                log "The packages are in the apt repository but their indices could not be signed, the repository looks as before"
+                retry "The export of the apt repository" reprepro -b "$(apt_repo_dir)" export
+                break
+            fi
+            yesno y "The publication failed, see above. Try again?" || die "the publication failed, stopped"
+        done
+    fi
 )
 eval "$(cd "$work" && "$BUILD_TOOLS/libexec/version")"
 cleanup
@@ -250,7 +265,7 @@ mv CHANGELOG.md.new CHANGELOG.md
 git add .version CHANGELOG.md
 [[ ! -f composer.json ]] || git add composer.json
 [[ ! -f composer.lock ]] || git add composer.lock
-git commit -q -m "chore(version): $next, the family linked again"
+git commit -q -m "chore(version): $next${family:+, the family linked again}"
 trap - ERR
 git push "$remote" "$branch"
 success "$project $new is released, now at $next."

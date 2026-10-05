@@ -28,12 +28,24 @@ It brings [bash-tools](https://github.com/magicoli/bash-tools), whose functions 
 | `apt-package [--publish]`         | builds the Debian packages of `packaging/*.yaml` and publishes them                                                                  |
 | `apt-publish PACKAGE.deb…`        | adds packages to an apt repository and publishes it; `--resume` publishes what a failed signature left pending                       |
 
+### In a project
+
+A project keeps two small scripts where one looks for them, `dev/build.sh` and `dev/release.sh`, that call the commands of its `vendor` folder:
+
+```bash
+#!/usr/bin/env bash
+exec "$(dirname "$0")/../vendor/bin/build-tools" release "$@"
+```
+
+(`build` for `dev/build.sh`.) This project has the same two, calling its own `bin/build-tools`.
+
 ## What a project provides
 
 - `.version`: the version being worked on (`1.2.3-beta.1`, `1.2.3-dev`); the tag of a release is the version.
 - `CHANGELOG.md`: sections `### Unreleased` then `### <version>`. The release commit and the tag are `v<version>` followed by the lines of the section, verbatim.
 - `packaging/<package>.yaml`: nfpm definitions, `${VERSION}` and `${DEB_VERSION}` are expanded. An executable `packaging/build` may prepare what they install.
 - `.distignore`: what git tracks and the packages and the zip do not hold (rsync style, `/name` at the root).
+- Without `packaging/*.yaml`, the project is released as a zip alone: no nfpm, no apt repository.
 - `packaging/siblings`: the projects of the family the Debian package gets from their own packages (composer name, package).
 
 ## Settings
@@ -56,3 +68,9 @@ it; the one of the project wins.
 
 A release asks one question, then signs: the passphrase of the key is asked first, and when a prompt times out because nobody
 was there, the failure is said and trying again is offered.
+
+## Tests
+
+`tests/lib/bashunit tests/`. The tests run in temporary folders, with stand-ins for `gh`, `gpg`, `reprepro`, `ssh` and `nfpm`: nothing is published, nothing leaves the machine.
+
+They check that the host name and the home folder of whoever runs them are not in the repository, and the words of `PRIVATE_WORDS` in `tests/.env` (git-ignored, created from `tests/.env.example`, with `PRIVATE_SKIP` for the files where they belong). The list of private words is not in the repository itself; the rest is discipline.
