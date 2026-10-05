@@ -52,14 +52,14 @@ function test_without_a_version_file_the_version_follows_the_last_tag() {
     assert_matches "VERSION=1\.0\.1-dev\.[0-9]+\+g[0-9a-f]+" "$out"
 }
 
-function test_without_a_version_file_a_pre_release_tag_is_followed_by_the_next_number() {
+function test_without_a_version_file_the_builds_after_a_pre_release_tag_are_numbered_on_it() {
     local out
     without_version_file
     git -C "$PROJECT" tag -a 3.0.0-beta.4 -m "3.0.0-beta.4"
     echo more >>"$PROJECT/README.md"
     git -C "$PROJECT" commit -q -am "after the tag"
     out=$(cd "$PROJECT" && "$BT" version)
-    assert_matches "VERSION=3\.0\.0-beta\.5\.[0-9]+\+g[0-9a-f]+" "$out"
+    assert_matches "VERSION=3\.0\.0-beta\.4\.[0-9]+\+g[0-9a-f]+" "$out"
 }
 
 function test_the_version_of_composer_json_counts_when_it_is_ahead_of_the_last_tag() {
@@ -89,4 +89,13 @@ function test_no_version_anywhere_is_said() {
     without_version_file
     out=$(cd "$PROJECT" && "$BT" version 2>&1)
     assert_contains "no version" "$out"
+}
+
+function test_a_build_in_a_pre_release_series_comes_after_its_last_release() {
+    local out
+    git -C "$PROJECT" tag -a 2.0.0-beta.1 -m "2.0.0-beta.1"
+    echo 2.0.0-beta.2 >"$PROJECT/.version"
+    git -C "$PROJECT" commit -q -am "bump"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=2\.0\.0-beta\.1\.[0-9]+\+g[0-9a-f]+" "$out"
 }

@@ -292,6 +292,6 @@ git add CHANGELOG.md
 [[ ! -f .version ]] || git add .version
 [[ ! -f composer.json ]] || git add composer.json
 [[ ! -f composer.lock ]] || git add composer.lock
-git commit -q -m "chore(version): $next${family:+, the family linked again}"
+git commit -q -m "dev: bump work version to $next${family:+, the family linked again}"
 trap - ERR
 success "$project $new released, $next next (committed, not pushed)"

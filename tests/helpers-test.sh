@@ -59,3 +59,11 @@ function test_the_prereleases_go_to_their_suite_when_the_repository_has_one() {
     assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3-beta.1" </dev/null)"
     assert_equals "stable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3" </dev/null)"
 }
+
+function test_a_pre_release_stays_in_its_series_and_a_stable_one_moves_on() {
+    local version next
+    for version in 3.0.0-beta.4:3.0.0-beta.5 3.0.0-alpha.1:3.0.0-alpha.2 3.0.0-rc:3.0.0-rc.2 3.0.0-rc.2:3.0.0-rc.3 3.0.0-rc3:3.0.0-rc4 3.0.0:3.0.1-dev 1.1.2:1.1.3-dev; do
+        next=$(bash -c "source '$ROOT/src/lib/version'; next_version ${version%%:*}")
+        assert_equals "${version##*:}" "$next"
+    done
+}

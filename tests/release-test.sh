@@ -41,7 +41,7 @@ function test_the_tag_and_the_branch_are_pushed_but_not_the_next_version() {
     release "" >/dev/null
     assert_contains "1.0.0" "$(git -C "$WORK/github.git" tag)"
     assert_equals "v1.0.0" "$(git -C "$WORK/github.git" log -1 --format=%s dev)"
-    assert_equals "chore(version): 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "dev: bump work version to 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
 }
 
 function test_the_question_shows_one_report_of_what_will_be_published() {
@@ -78,7 +78,7 @@ function test_the_next_version_is_said_once_it_is_made() {
 function test_the_next_version_follows_and_the_changelog_has_a_new_unreleased_section() {
     release "" >/dev/null
     assert_equals "1.0.1-dev" "$(cat "$PROJECT/.version")"
-    assert_equals "chore(version): 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "dev: bump work version to 1.0.1-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
     assert_equals "### Unreleased
 ### 1.0.0" "$(grep '^### ' "$PROJECT/CHANGELOG.md")"
 }
@@ -201,7 +201,7 @@ function test_a_project_without_a_version_file_is_released_from_its_last_tag() {
     assert_contains "0.9.1" "$(git -C "$WORK/github.git" tag)"
     assert_file_not_exists "$PROJECT/.version"
     assert_equals "v0.9.1" "$(git -C "$WORK/github.git" log -1 --format=%s dev)"
-    assert_equals "chore(version): 0.9.2-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
+    assert_equals "dev: bump work version to 0.9.2-dev" "$(git -C "$PROJECT" log -1 --format=%s)"
     assert_equals "### Unreleased
 ### 0.9.1" "$(grep '^### ' "$PROJECT/CHANGELOG.md")"
 }

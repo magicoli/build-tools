@@ -48,6 +48,10 @@ exec "$(dirname "$0")/../vendor/bin/build-tools" release "$@"
 - Without `packaging/*.yaml`, the project is released as a zip alone: no nfpm, no apt repository.
 - `packaging/siblings`: the projects of the family the Debian package gets from their own packages (composer name, package).
 
+## Versions
+
+A release is the version in progress without `-dev`. A pre-release stays in its series: `3.0.0-beta.4` is followed by `3.0.0-beta.5`, and so on, until a release is asked in another one (`build-tools release 3.0.0-rc.1`, then `rc.2`…, or `build-tools release 3.0.0`). Only a stable release moves to the next patch (`3.0.1-dev`). Pre-releases are GitHub pre-releases, and go to the suite of the pre-releases when the apt repository has one. Number them the same way (`rc.1`, `rc.2`): Debian sorts `rc3` before `rc.2`.
+
 ## Settings
 
 Everything comes from the `.env` of the project (git-ignored), see `.env.example`. There is no default host, no default path and
