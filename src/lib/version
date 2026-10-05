@@ -43,3 +43,109 @@ current_version() {
 		return 1
 	fi
 }
+
+# The rungs of a version, from the lowest: dev, alpha, beta, rc, then the stable version (no suffix)
+version_rank() { # level
+	case $1 in
+	dev) echo 0 ;;
+	alpha) echo 1 ;;
+	beta) echo 2 ;;
+	rc) echo 3 ;;
+	"") echo 4 ;;
+	*) return 1 ;;
+	esac
+}
+
+# A version as "major minor patch rank number" (3.0.0-beta.4 -> 3 0 0 2 4); the number of a bare rung (3.0.0-rc) is 0.
+# Fails when it is not a version of a rung above.
+parse_version() { # version
+	local re='^([0-9]+)\.([0-9]+)\.([0-9]+)(-([a-z]+)\.?([0-9]*))?$' rank
+	[[ $1 =~ $re ]] || return 1
+	rank=$(version_rank "${BASH_REMATCH[5]}") || return 1
+	echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} $rank ${BASH_REMATCH[6]:-0}"
+}
+
+# Whether the first version is above the second (semver order, with the rungs above)
+version_gt() { # version, version
+	local a b i
+	a=($(parse_version "$1")) || return 1
+	b=($(parse_version "$2")) || return 1
+	for i in 0 1 2 3 4; do
+		((a[i] > b[i])) && return 0
+		((a[i] < b[i])) && return 1
+	done
+	return 1
+}
+
+# The version a release gives, from the last release (empty: none) and what is asked:
+#   (nothing)           a stable version moves to the next patch, a pre-release to the next number of its series
+#   stable              the stable version of a pre-release, else the next patch
+#   patch minor major   the stable version that bumps the one of the last release
+#   dev alpha beta rc   the next number of that series, or its first one (.1) on the same version when it is above the
+#                       last release, on the next patch when it is not
+#   X.Y.Z-rung.N        that version, which must be above the last release
+# Fails with a message on stderr when it cannot say
+release_version() { # asked, last
+	local asked=${1:-} last=${2:-} major minor patch rank number want
+	if [[ -z $last ]]; then
+		echo "no release yet to follow: release X.Y.Z, or 1.0.0 to begin" >&2
+		return 1
+	fi
+	read -r major minor patch rank number < <(parse_version "$last") || {
+		echo "cannot read the last release $last" >&2
+		return 1
+	}
+	case $asked in
+	"")
+		if ((rank == 4)); then
+			echo "$major.$minor.$((patch + 1))"
+		else
+			echo "$major.$minor.$patch-$(release_rung "$last")$(release_number "$last" next)"
+		fi
+		;;
+	stable)
+		if ((rank == 4)); then
+			echo "$major.$minor.$((patch + 1))"
+		else
+			echo "$major.$minor.$patch"
+		fi
+		;;
+	patch) echo "$major.$minor.$((patch + 1))" ;;
+	minor) echo "$major.$((minor + 1)).0" ;;
+	major) echo "$((major + 1)).0.0" ;;
+	dev | alpha | beta | rc)
+		want=$(version_rank "$asked")
+		if ((want == rank)); then
+			echo "$major.$minor.$patch-$asked.$((number + 1))"
+		elif ((want > rank)); then
+			echo "$major.$minor.$patch-$asked.1"
+		else
+			echo "$major.$minor.$((patch + 1))-$asked.1"
+		fi
+		;;
+	*)
+		if parse_version "$asked" >/dev/null; then
+			version_gt "$asked" "$last" || {
+				echo "$asked is not above the last release $last" >&2
+				return 1
+			}
+			echo "$asked"
+		else
+			echo "$asked: not a version, nor patch|minor|major|stable|dev|alpha|beta|rc" >&2
+			return 1
+		fi
+		;;
+	esac
+}
+
+# The rung of a pre-release (3.0.0-beta.4 -> beta), and its next number with the dot it is written with (.5, or 5 for rc3)
+release_rung() { # version
+	[[ $1 =~ -([a-z]+) ]] && echo "${BASH_REMATCH[1]}"
+}
+release_number() { # version, next
+	if [[ $1 =~ -[a-z]+(\.?)([0-9]+)$ ]]; then
+		echo "${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+	else
+		echo ".2"
+	fi
+}

@@ -10,7 +10,7 @@ usage() {
 usage: build-tools COMMAND [ARGUMENTS]
 
   build [deb|zip] [package...]   the Debian packages and the zip of the project, from the last commit
-  release [VERSION]              the whole release, from where it stands (release status: what remains)
+  release [WHAT]                 the whole release, from where it stands; WHAT: patch|minor|major|stable|dev|alpha|beta|rc|X.Y.Z-rung.N
   switch dev|release             the projects of the family linked (dev) or required by version (release)
   stage DIR deb|zip              the files a package or a zip holds, in DIR
   version                        the version of this build, as VERSION= and DEB_VERSION=

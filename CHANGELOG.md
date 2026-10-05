@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- new: `release patch|minor|major|stable|dev|alpha|beta|rc|X.Y.Z-rung.N`, from the last release
+- update: `release` alone is the next patch after a stable version, the next number after a pre-release
 - new: `.version` is optional, the version follows the last tag, or composer.json when it is ahead
 - update: the packages, the zip and the release have one version, from `build-tools version`
 - update: shorter messages

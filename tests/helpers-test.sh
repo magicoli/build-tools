@@ -67,3 +67,32 @@ function test_a_pre_release_stays_in_its_series_and_a_stable_one_moves_on() {
         assert_equals "${version##*:}" "$next"
     done
 }
+
+# What a release gives, from the last release and what is asked: cases written as "asked|last|result"
+function test_what_a_release_gives_follows_the_rungs() {
+    local case asked last result
+    for case in \
+        "|1.0.7|1.0.8" "|3.0.0-beta.4|3.0.0-beta.5" "|3.0.0-rc|3.0.0-rc.2" \
+        "stable|3.0.0-rc.2|3.0.0" "stable|1.0.7|1.0.8" \
+        "patch|1.0.7|1.0.8" "minor|1.0.7|1.1.0" "major|1.0.7|2.0.0" "patch|3.0.0-beta.4|3.0.1" \
+        "beta|3.0.0-beta.4|3.0.0-beta.5" "rc|3.0.0-beta.4|3.0.0-rc.1" "beta|3.0.0-rc.2|3.0.1-beta.1" \
+        "alpha|1.0.7|1.0.8-alpha.1" "dev|3.0.0-dev.1|3.0.0-dev.2" "dev|3.0.0-alpha.1|3.0.1-dev.1" \
+        "3.0.0-rc.1|3.0.0-beta.4|3.0.0-rc.1" "3.0.0|3.0.0-rc.2|3.0.0" "4.0.0|3.0.0|4.0.0"; do
+        IFS='|' read -r asked last result <<<"$case"
+        assert_equals "$result" "$(bash -c "source '$ROOT/src/lib/version'; release_version '$asked' '$last'")"
+    done
+}
+
+function test_a_version_that_is_not_above_the_last_release_is_refused() {
+    local out
+    for case in "3.0.0-beta.1|3.0.0-beta.4" "2.9.9|3.0.0" "3.0.0|3.0.0" "3.0.0-rc.1|3.0.0"; do
+        out=$(bash -c "source '$ROOT/src/lib/version'; release_version '${case%%|*}' '${case##*|}'" 2>&1) && fail "${case%%|*} after ${case##*|} was accepted"
+        assert_contains "is not above" "$out"
+    done
+}
+
+function test_what_is_not_a_version_nor_a_word_of_the_rungs_is_refused() {
+    local out
+    out=$(bash -c "source '$ROOT/src/lib/version'; release_version nonsense 1.0.0" 2>&1) && fail "accepted"
+    assert_contains "patch|minor|major|stable|dev|alpha|beta|rc" "$out"
+}

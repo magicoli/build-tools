@@ -3,7 +3,7 @@
 # again, it does what remains. The projects of the family are released in the order of their dependencies (rest-php,
 # engine, helpers, kit): each one needs the previous one published.
 #
-#   build-tools release [VERSION]   the whole release, after one question that shows what will be published: the release
+#   build-tools release [WHAT]      the whole release, after one question that shows what will be published: the release
 #                              commit (.version, the family required by version, CHANGELOG; its message is v<version>
 #                              then the changelog, verbatim, like the message of the tag), the tag, the push to
 #                              RELEASE_REMOTE (github), the zip, the publication (apt repository, GitHub release with the
@@ -11,8 +11,13 @@
 #                              the next development version, committed here and not pushed: it goes with the next release
 #   build-tools release status      what is done and what remains
 #
-# VERSION is the version to release, by default the development version without -dev, or the version of .version when it
-# has no -dev. RELEASE_YES=1 answers yes to the question.
+# WHAT says the version, from the last release (see release_version in src/lib/version):
+#   (nothing)           the next patch after a stable version, the next number of the series after a pre-release
+#   stable              the stable version of a pre-release, else the next patch
+#   patch minor major   a bump
+#   dev alpha beta rc   the next number of the series, or its first one (a lower one moves to the next patch)
+#   1.2.3-beta.4        that version, which must be above the last release
+# RELEASE_YES=1 answers yes to the question.
 
 set -e
 source "$(dirname "$(realpath "$0")")/../src/lib/common"
@@ -84,22 +89,28 @@ restore() {
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "uncommitted changes, commit them first:
 $(git status --short --untracked-files=no)"
 
-current=$(current_version) || die "no version: add .version, a version to composer.json, or tag one"
-# A release commit on HEAD is a release in progress, whatever the version says
+asked=${1:-}
+[[ $asked != status ]] || asked=
+last=$(last_tag)
+# A release commit on HEAD is a release in progress: it is finished, not another one started
 in_progress=$(git log -1 --format=%s | sed -n 's/^v\([0-9][^[:space:]]*\)$/\1/p')
-if [[ -n "${1:-}" && $1 != status ]]; then
-	new=$1
-elif [[ -n "$in_progress" ]]; then
+if [[ -n "$in_progress" ]]; then
+	[[ -z "$asked" ]] || die "v$in_progress is in progress, run it again without argument to finish it"
 	new=$in_progress
-elif [[ $current == *-dev ]]; then
-	new=${current%-dev}
+elif [[ -z "$last" ]]; then
+	# The first release: the version in progress, or the one given
+	if [[ -z "$asked" || $asked == stable ]]; then
+		new=$(current_version) || die "no version: add .version, a version to composer.json, or release X.Y.Z"
+		new=${new%-dev}
+	else
+		parse_version "$asked" >/dev/null || die "first release: stable, or a version (1.0.0)"
+		new=$asked
+	fi
 else
-	new=$current
+	new=$(release_version "$asked" "$last" 2>&1) || die "$new"
 fi
 tag=$(tag_name "$new")
-next=
-next=${2:-}
-[[ -n "$next" ]] || next=$(next_version "$new") || die "cannot guess the version after $new: build-tools release $new NEXT_VERSION"
+next=$(next_version "$new") || die "cannot guess the version after $new"
 
 # Where the release stands
 prepared=0
@@ -115,9 +126,9 @@ if [[ $tag_remote == 1 && -n "$repo" ]] && "$gh" release view "$tag" -R "$repo" 
 fi
 
 # A project with nothing under Unreleased and no release in progress has nothing to release: not an error
-if [[ $prepared == 0 ]] && ! { grep -qx '### Unreleased' CHANGELOG.md && [[ -n "$(changelog_section Unreleased | tr -d '[:space:]')" ]]; }; then
-	last=$(git describe --tags --abbrev=0 --match '[0-9]*' --match 'v[0-9]*' 2>/dev/null || echo none)
-	end 0 "$project: nothing under Unreleased in CHANGELOG.md (last release: $last)"
+# (asked for, a release may have no new line: the promotion of a release candidate)
+if [[ $prepared == 0 ]] && ! { grep -qx '### Unreleased' CHANGELOG.md && { [[ -n "$asked" ]] || [[ -n "$(changelog_section Unreleased | tr -d '[:space:]')" ]]; }; }; then
+	end 0 "$project: nothing under Unreleased in CHANGELOG.md (last release: ${last:-none})"
 fi
 
 # The projects of the family this one requires (packaging/siblings), if any

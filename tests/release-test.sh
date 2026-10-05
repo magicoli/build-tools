@@ -225,3 +225,53 @@ function test_it_refuses_without_a_changelog() {
     out=$(release "")
     assert_contains "no CHANGELOG.md" "$out"
 }
+
+# What is asked: the series, the rungs, a version that is not above
+tag_last_release() { # version
+    git -C "$PROJECT" tag -a "$1" -m "v$1"
+    echo more >>"$PROJECT/README.md"
+    git -C "$PROJECT" commit -q -am "after $1"
+}
+
+function test_a_rung_below_the_last_release_starts_a_pre_release_on_the_next_patch() {
+    tag_last_release 1.0.0
+    release "" beta >/dev/null
+    assert_contains "1.0.1-beta.1" "$(git -C "$WORK/github.git" tag)"
+    assert_contains "--prerelease" "$(sed -n '/^gh release create/,/^gh release upload/p' "$STUB_LOG")"
+}
+
+function test_stable_promotes_a_release_candidate_even_with_nothing_new() {
+    tag_last_release 3.0.0-rc.2
+    printf '## Changelog\n\n### Unreleased\n\n### 3.0.0-rc.2\n\n- the candidate\n' >"$PROJECT/CHANGELOG.md"
+    git -C "$PROJECT" commit -q -am "nothing new"
+    release "" stable >/dev/null
+    assert_contains "3.0.0" "$(git -C "$WORK/github.git" tag)"
+    assert_not_contains "--prerelease" "$(sed -n '/^gh release create/,/^gh release upload/p' "$STUB_LOG")"
+}
+
+function test_a_version_that_is_not_above_the_last_release_stops_before_anything() {
+    local out
+    tag_last_release 1.0.0
+    out=$(release "" 0.5.0)
+    assert_contains "0.5.0 is not above the last release 1.0.0" "$out"
+    assert_equals "1" "$(git -C "$PROJECT" tag | wc -l | tr -d ' ')"
+}
+
+function test_a_release_in_progress_is_finished_not_replaced() {
+    local out
+    tag_last_release 1.0.0
+    FAIL_GH_CREATE=1 release "" >/dev/null
+    unset FAIL_GH_CREATE
+    out=$(release "" beta)
+    assert_contains "v1.0.1 is in progress" "$out"
+    assert_not_contains "1.0.1-beta" "$(git -C "$PROJECT" tag)"
+}
+
+function test_a_pre_release_goes_to_the_suite_of_the_pre_releases() {
+    local out
+    tag_last_release 1.0.0
+    unset RELEASE_YES
+    out=$(APT_REPO_PRERELEASE_DIST=unstable release "n
+" beta)
+    assert_contains "  targets: host.example.test (unstable), github.com/owner/demo" "$out"
+}
