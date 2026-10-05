@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- new: an executable `packaging/zip` makes the zip of a project instead of the generic one
+
 ### 0.1.2
 
 - fix: a `build/packaging.env` left by a former build no longer gives its version to the package

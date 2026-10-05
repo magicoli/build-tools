@@ -45,7 +45,7 @@ exec "$tool" release "$@"
 
 - `.version` (optional): the version in progress (`1.2.3-beta.1`, `1.2.3-dev`). Without it, the version of `composer.json` when it is ahead of the last tag, else the one after the last tag (`1.0.7` then `1.0.8-dev`, `3.0.0-beta.4` then `3.0.0-beta.5`). The tag of a release is the version.
 - `CHANGELOG.md`: sections `### Unreleased` then `### <version>`. The release commit and the tag are `v<version>` followed by the lines of the section, verbatim.
-- `packaging/<package>.yaml`: nfpm definitions, `${VERSION}` and `${DEB_VERSION}` are expanded. An executable `packaging/build` may prepare what they install.
+- `packaging/<package>.yaml`: nfpm definitions, `${VERSION}` and `${DEB_VERSION}` are expanded. An executable `packaging/build` may prepare what they install, and an executable `packaging/zip` makes the zip instead of build-tools.
 - `.distignore`: what git tracks and the packages and the zip do not hold (rsync style, `/name` at the root).
 - Without `packaging/*.yaml`, the project is released as a zip alone: no nfpm, no apt repository.
 - `packaging/siblings`: the projects of the family the Debian package gets from their own packages (composer name, package).
