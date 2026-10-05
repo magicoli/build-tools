@@ -2,9 +2,7 @@
 
 ### Unreleased
 
-### 0.1.3
-
-- new: an executable `packaging/zip` makes the zip of a project instead of the generic one
+- new: an executable `packaging/build-zip` in the project overrides the generic one
 
 ### 0.1.2
 
