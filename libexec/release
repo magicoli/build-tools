@@ -167,7 +167,7 @@ show_plan() {
 		names=$(carrying_version | paste -sd, - | sed 's/,/, /g')
 		[[ -z "$names" ]] || assets+=", deb ($names)"
 		others=$(own_version | paste -sd, - | sed 's/,/, /g')
-		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "${new/-/\~}")), $publication"
+		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "$new")), $publication"
 	fi
 	report="preparing to publish $project $new"
 	report+=$'\n'$(printf '  %s %s' "tag:" "$tag")

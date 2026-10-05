@@ -3,7 +3,7 @@
 ### Unreleased
 
 - fix: the report of a release lists the packages that carry its version, and says the others may be published too
-- fix: a revision of Debian (`0.9.3.0-1`) is no pre-release: its package stays in the suite of the releases
+- fix: a pre-release has a `~` or a name after the `-` (`3.0.0-beta.5`); a Debian revision (`0.9.3.0-1`) is not one
 
 ### 0.1.4
 
