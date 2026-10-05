@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.1
 
 - new: `release patch|minor|major|stable|dev|alpha|beta|rc|X.Y.Z-rung.N`, from the last release
 - update: `release` alone is the next patch after a stable version, the next number after a pre-release
