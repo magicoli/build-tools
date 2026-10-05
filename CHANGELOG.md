@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.5
 
 - fix: the report of a release lists the packages that carry its version, and says the others may be published too
 - fix: a pre-release has a `~` or a name after the `-` (`3.0.0-beta.5`); a Debian revision (`0.9.3.0-1`) is not one
