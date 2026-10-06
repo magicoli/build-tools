@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.6
 
 - fix: a version tag is `v` or nothing then numbers with dots; `3d-demo` or `v1-test` is a tag of a step, not a version
 - fix: a tag that is not a version no longer changes the style of the tags of a release
