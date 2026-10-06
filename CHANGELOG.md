@@ -2,6 +2,9 @@
 
 ### Unreleased
 
+- fix: a tag that is not a version (`vonda-test`) no longer changes the style of the tags of a release
+- new: a build says when `dist/` holds packages of another build, which `dpkg -i dist/*.deb` would mix
+
 ### 0.1.5
 
 - fix: the report of a release lists the packages that carry its version, and says the others may be published too

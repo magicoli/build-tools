@@ -96,6 +96,8 @@ done
 cp "$config" "$STUB_STATE/last-definition.yaml"
 name=$(sed -n 's/^name: *//p' "$config" | head -1)
 version=$(sed -n 's/^version: *//p' "$config" | head -1 | tr -d '"')
+# version_schema: semver, as nfpm writes it for Debian
+[[ $(sed -n 's/^version_schema: *//p' "$config" | head -1) != semver ]] || version=${version/-/\~}
 mkdir -p "$target"
 printf 'deb' >"$target/${name}_${version}_all.deb"
 echo "created package: ${target%/}/${name}_${version}_all.deb"

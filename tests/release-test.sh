@@ -288,3 +288,11 @@ function test_the_report_lists_the_packages_that_carry_the_version_of_the_projec
     assert_contains "  also: other (if their version is new)" "$out"
     assert_not_contains "OTHER_VERSION" "$out"
 }
+
+function test_a_tag_of_a_step_does_not_change_the_style_of_the_version_tags() {
+    tag_last_release 1.0.0
+    GIT_COMMITTER_DATE="2099-01-01T00:00:00" git -C "$PROJECT" tag -a vonda-test -m "a step"
+    release "" >/dev/null
+    assert_contains "1.0.1" "$(git -C "$WORK/github.git" tag)"
+    assert_not_contains "v1.0.1" "$(git -C "$WORK/github.git" tag)"
+}

@@ -64,4 +64,19 @@ for format in "${formats[@]}"; do
 	esac
 done
 
+# What dist/ holds of the packages of this project must be of this build: installing dist/*.deb would mix two
+if [[ " ${formats[*]} " == *" deb "* ]]; then
+	eval "$("$BUILD_TOOLS/libexec/version")"
+	stale=()
+	for definition in packaging/*.yaml; do
+		grep -qE '\$\{(DEB_)?VERSION\}' "$definition" || continue
+		package=$(sed -n 's/^name: *//p' "$definition" | head -1)
+		[[ $package != *'$'* ]] || continue
+		for deb in "dist/${package}_"*.deb; do
+			[[ ! -e "$deb" || $deb == "dist/${package}_${DEB_VERSION}_"* ]] || stale+=("${deb##*/}")
+		done
+	done
+	[[ ${#stale[@]} -eq 0 ]] || warning "dist/ has packages of another build: ${stale[*]}"
+fi
+
 success "Built from the commit $(git rev-parse --short HEAD), ${DIRTY:+with uncommitted changes, }\"$(git log -1 --format=%s)\"."
