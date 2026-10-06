@@ -99,3 +99,22 @@ function test_a_build_in_a_pre_release_series_comes_after_its_last_release() {
     out=$(cd "$PROJECT" && "$BT" version)
     assert_matches "VERSION=2\.0\.0-beta\.1\.[0-9]+\+g[0-9a-f]+" "$out"
 }
+
+function test_a_tag_of_a_step_is_not_the_version_of_the_build() {
+    local out
+    git -C "$PROJECT" tag -a 3d-demo -m "a step"
+    git -C "$PROJECT" tag -a v1-test -m "a step"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=2\.0\.0-beta\.1\.[0-9]+\+g[0-9a-f]+" "$out"
+}
+
+function test_the_last_version_tag_is_the_last_version_not_the_last_tag() {
+    local out
+    git -C "$PROJECT" tag -a 1.0.0 -m "1.0.0"
+    echo more >>"$PROJECT/README.md"
+    git -C "$PROJECT" commit -q -am "after 1.0.0"
+    git -C "$PROJECT" tag -a 2fa-login -m "a step"
+    out=$(cd "$PROJECT" && "$BT" version)
+    assert_matches "VERSION=2\.0\.0-beta\.1\.[0-9]+\+g[0-9a-f]+" "$out"
+    assert_not_contains "2fa" "$out"
+}

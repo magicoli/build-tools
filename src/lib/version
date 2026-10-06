@@ -1,8 +1,35 @@
 # How a project numbers its versions: the one in progress, the one that follows a release. Sourced by common, not run.
 
-# The latest version tag (1.2.3, v1.2.3, 1.2.3-beta.1), without the v; nothing when there is none
+# Whether a tag is a version: v or nothing, then numbers with dots, then what a pre-release adds (1.2.3, v1.2.3, 3.0.0-beta.4,
+# 0.4+git20210131.67644ca). Not a tag of a step (opensimsearch-module, 3d-demo, v1-test, viewer-1.23-integration)
+is_version_tag() { # tag
+	[[ $1 =~ ^v?[0-9]+(\.[0-9]+)+([-+~][0-9A-Za-z.+~-]*)?$ ]]
+}
+
+# git describe, on the version tags only: version_describe [-C folder] [options of git describe]
+version_describe() {
+	local dir=. tag excluded=()
+	if [[ ${1:-} == -C ]]; then
+		dir=$2
+		shift 2
+	fi
+	while IFS= read -r tag; do
+		is_version_tag "$tag" || excluded+=(--exclude "$tag")
+	done < <(git -C "$dir" tag --list '[0-9]*' 'v[0-9]*')
+	git -C "$dir" describe --tags --match '[0-9]*' --match 'v[0-9]*' "${excluded[@]}" "$@" 2>/dev/null
+}
+
+# The version tags, the last made first
+version_tags() {
+	local tag
+	while IFS= read -r tag; do
+		! is_version_tag "$tag" || echo "$tag"
+	done < <(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/[0-9]*' 'refs/tags/v[0-9]*')
+}
+
+# The latest version tag, without the v; nothing when there is none
 last_tag() {
-	git describe --tags --abbrev=0 --match '[0-9]*' --match 'v[0-9]*' 2>/dev/null | sed 's/^v//' || true
+	version_describe --abbrev=0 | sed 's/^v//' || true
 }
 
 # The version of composer.json, if it has one

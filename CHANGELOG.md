@@ -2,7 +2,8 @@
 
 ### Unreleased
 
-- fix: a tag that is not a version (`vonda-test`) no longer changes the style of the tags of a release
+- fix: a version tag is `v` or nothing then numbers with dots; `3d-demo` or `v1-test` is a tag of a step, not a version
+- fix: a tag that is not a version no longer changes the style of the tags of a release
 - new: a build says when `dist/` holds packages of another build, which `dpkg -i dist/*.deb` would mix
 
 ### 0.1.5

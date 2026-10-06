@@ -109,3 +109,15 @@ function test_what_is_not_a_version_nor_a_word_of_the_rungs_is_refused() {
     out=$(bash -c "source '$ROOT/src/lib/version'; release_version nonsense 1.0.0" 2>&1) && fail "accepted"
     assert_contains "patch|minor|major|stable|dev|alpha|beta|rc" "$out"
 }
+
+# A version tag is v or nothing, then numbers with dots; a tag of a step is not one, whatever it starts with
+function test_only_a_number_with_dots_makes_a_version_tag() {
+    local tag
+    for tag in 1.2.3 v1.2.3 1.0 v10.20.30-rc.1 3.0.0-beta.4 3.0.0~beta.4 0.4+git20210131.67644ca; do
+        bash -c "source '$ROOT/src/lib/version'; is_version_tag '$tag'" || fail "$tag is a version"
+    done
+    for tag in opensimsearch-module 3d-demo 2fa-login v1-test vonda-test viewer-1.23-integration 1 v1 v1.2.3x; do
+        bash -c "source '$ROOT/src/lib/version'; is_version_tag '$tag'" && fail "$tag is not a version"
+    done
+    assert_equals "" ""
+}

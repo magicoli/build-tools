@@ -38,7 +38,7 @@ set_version() { # version
 # The tags of this project start with v or not, as the last version tag did (other tags, of a step, say nothing)
 tag_name() {
 	local last
-	last=$(git for-each-ref --sort=-creatordate --count=1 --format='%(refname:short)' 'refs/tags/[0-9]*' 'refs/tags/v[0-9]*')
+	last=$(version_tags | head -1)
 	[[ $last == v* ]] && echo "v$1" || echo "$1"
 }
 # The lines of a section of CHANGELOG.md (### title), verbatim, without the title and the blank lines around
