@@ -74,7 +74,10 @@ case "$3" in
         mkdir -p "$repo/public/dists/stable"
         echo exported >"$repo/public/dists/stable/Release"
         ;;
-    list) ;;
+    list)
+        # what includedeb put in the database: "<suite> <file>" -> "<suite>|main|all: <name> <version>"
+        awk -v d="$4" -v n="$5" '$1 == d { f = $2; sub(/\.deb$/, "", f); name = f; sub(/_.*/, "", name); ver = f; sub(/^[^_]*_/, "", ver); sub(/_[^_]*$/, "", ver); if (name == n) print d "|main|all: " n " " ver }' "$repo/db/packages.db"
+        ;;
 esac
 exit 0
 STUB

@@ -163,14 +163,18 @@ dist_of() {
     apt_dist_of "$version"
 }
 
-# Whether the repository already has this package file (name_version_arch.deb)
+# Whether the repository already has this package file (name_version_arch.deb), in any suite: the pool is one, a file of that name
+# cannot be added again with another content (a package built again is not the same file), whatever the suite it was added to
 published() {
-    local file name version
+    local file name version codename
     file=$(basename "$1" .deb)
     name=${file%%_*}
     version=${file#*_}
     version=${version%_*}
-    reprepro -b "$REPO_DIR" list "$(dist_of "$1")" "$name" | grep -q ": $name $version\$"
+    for codename in $(awk '$1 == "Codename:" {print $2}' "$REPO_DIR/conf/distributions"); do
+        ! reprepro -b "$REPO_DIR" list "$codename" "$name" | grep -q ": $name $version\$" || return 0
+    done
+    return 1
 }
 
 # Each package definition, with the variables of the environment and the

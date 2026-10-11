@@ -83,6 +83,20 @@ function test_a_revision_of_debian_stays_in_the_suite_of_the_releases() {
     assert_not_contains "rev-one" "$(grep 'dist=unstable ' "$STUB_LOG" || true)"
 }
 
+function test_a_package_already_in_another_suite_is_not_published_again() {
+    local out
+    printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "a pre-release"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    export APT_REPO_PRERELEASE_DIST=unstable
+    # It went to stable once: the pool is one, the same file name cannot be added again with another content
+    echo "stable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
+    out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish 2>&1)
+    assert_contains "Already published: pre-one_2.0.0~beta.1_all.deb" "$out"
+    assert_not_contains "pre-one" "$(grep '^apt-publish' "$STUB_LOG" || true)"
+}
+
 function test_without_a_prerelease_suite_all_go_to_the_same_one() {
     printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
     git -C "$PROJECT" add -A
