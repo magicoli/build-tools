@@ -2,7 +2,11 @@
 
 ### Unreleased
 
-- fix: a package already in the repository, in any suite, is not published again (the pool is one: a package built again, with the same name and another content, is refused)
+- new `--tests` as an explicit suite override for APT publication
+- feature(apt-package): publish development packages to tests
+- update(apt-publish): allow unsigned tests suite
+- fix(apt-package): a package already in any suite of the repository is not published again
+
 ### 0.1.6
 
 - fix: a version tag is `v` or nothing then numbers with dots; `3d-demo` or `v1-test` is a tag of a step, not a version

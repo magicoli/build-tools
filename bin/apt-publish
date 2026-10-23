@@ -12,9 +12,9 @@
 #   APT_REPO_PATH  git clone of the repository on that host (e.g. /var/www/apt-repo)
 #   APT_REPO_DIST  suite (default: stable)
 #
-# The packages are added to the clone with reprepro, which signs the repository with the key of conf/distributions (it
-# asks for the passphrase: when nobody answers in time, it says so and offers to try again). The clone is updated first,
-# then committed and pushed, and the host pulls it: the host only serves signed files and has no key.
+# The packages are added to the clone with reprepro, which signs suites configured with SignWith in conf/distributions
+# (it asks for the passphrase). The clone is updated first, then committed and pushed, and the host pulls it. The tests
+# suite may be unsigned; the host has no signing key.
 #
 # Requirements: reprepro, gpg with the signing key, git, ssh.
 

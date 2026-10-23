@@ -131,7 +131,7 @@ STUB
 make_apt_repo() {
     APT="$WORK/apt"
     mkdir -p "$APT/conf" "$APT/db" "$APT/public"
-    printf 'Codename: stable\nSuite: stable\nSignWith: TESTKEY0001\n\nCodename: unstable\nSuite: unstable\nSignWith: TESTKEY0001\n\nCodename: tests\nSuite: tests\nSignWith: TESTKEY0001\n' >"$APT/conf/distributions"
+    printf 'Codename: stable\nSuite: stable\nSignWith: TESTKEY0001\n\nCodename: unstable\nSuite: unstable\nSignWith: TESTKEY0001\n\nCodename: tests\nSuite: tests\n' >"$APT/conf/distributions"
     printf 'APT_REPO_HOST=host.example.test\nAPT_REPO_PATH="/srv/apt test"\n' >"$APT/.env"
     : >"$APT/db/packages.db"
     git init -q -b main "$APT"
