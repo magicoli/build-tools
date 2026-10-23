@@ -25,7 +25,7 @@ It brings [bash-tools](https://github.com/magicoli/bash-tools), whose functions 
 | `build-tools switch dev\|release` | the projects of the family linked next to this one (dev), or required by version from Packagist (release)                           |
 | `build-tools stage DIR deb\|zip`  | the files a package or a zip holds, in DIR                                                                                          |
 | `build-tools version`             | the version of this build, as `VERSION=` and `DEB_VERSION=` lines                                                                    |
-| `apt-package [--publish]`         | builds the Debian packages of `packaging/*.yaml` and publishes them                                                                  |
+| `apt-package [--publish] [--tests]` | builds the Debian packages of `packaging/*.yaml` and publishes them; `--tests` targets the APT `tests` suite for development builds |
 | `apt-publish PACKAGE.deb…`        | adds packages to an apt repository and publishes it; `--resume` publishes what a failed signature left pending                       |
 
 ### In a project

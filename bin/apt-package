@@ -4,6 +4,7 @@
 # Usage, from anywhere in the project:
 #   apt-package [package...]             build into dist/
 #   apt-package --publish [package...]   build and publish with apt-publish, and on GitHub
+#   apt-package --publish --tests [package...]  publish to APT suite tests, without a GitHub release
 #
 # The project describes each package in its own packaging/<package>.yaml file. All are built, or only the ones named.
 # Where to publish is not known here: it is in the .env of the project, and the .env of the apt repository for what the
@@ -47,21 +48,28 @@
 
 set -e
 
+APT_PACKAGE_ARGS=("$@")
 source "$(dirname "$(realpath "$0")")/../src/lib/common"
 # apt-publish is next to this script, even when called through a link
 BIN_DIR=$BUILD_TOOLS/bin
 
 PUBLISH=false
+TESTS=false
 NAMES=()
-for arg in "$@"; do
+for arg in "${APT_PACKAGE_ARGS[@]}"; do
     case "$arg" in
         --publish) PUBLISH=true ;;
+        --tests) TESTS=true ;;
         -*)
             die "Unknown option: $arg"
             ;;
         *) NAMES+=("$arg") ;;
     esac
 done
+
+if $TESTS && ! $PUBLISH; then
+    die "--tests requires --publish"
+fi
 
 REPO_DIR=${APT_REPO_DIR:-}
 if $PUBLISH; then
@@ -107,7 +115,7 @@ if $PUBLISH; then
     if ! git -C "$PROJECT_DIR" diff --quiet HEAD; then
         die "Publishing needs a clean tree."
     fi
-    if [[ -z "$TAG" ]]; then
+    if [[ -z "$TAG" ]] && ! $TESTS; then
         for definition in "${CONFIGS[@]}"; do
             if project_version "$definition"; then
                 die "Publishing $(basename "$definition" .yaml) needs a version tag (git tag 1.2.3)."
@@ -118,7 +126,7 @@ if $PUBLISH; then
     # The GitHub remote and repository (owner/name) of the project, if any,
     # checked before publishing anything
     GITHUB_REPO=
-    if [[ -n "$TAG" ]]; then
+    if [[ -n "$TAG" && ! $TESTS ]]; then
         read -r GITHUB_REMOTE GITHUB_REPO < <(
             git -C "$PROJECT_DIR" remote -v | sed -nE \
                 's#^([^[:space:]]+)[[:space:]]+(git@github\.com:|(https|ssh)://([^@/]+@)?github\.com/)([^[:space:]]+)[[:space:]]+\(push\)$#\1 \5#p' |
@@ -157,6 +165,7 @@ mkdir -p dist
 # APT_REPO_PRERELEASE_DIST when there is one, the others to APT_REPO_DIST
 dist_of() {
     local file version
+    $TESTS && { echo tests; return; }
     file=$(basename "$1" .deb)
     version=${file#*_}
     version=${version%_*}

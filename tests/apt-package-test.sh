@@ -106,3 +106,21 @@ function test_without_a_prerelease_suite_all_go_to_the_same_one() {
     assert_equals "1" "$(grep -c '^apt-publish' "$STUB_LOG")"
     assert_contains "dist=stable" "$(grep '^apt-publish' "$STUB_LOG")"
 }
+
+function test_tests_option_publishes_untagged_development_packages_to_tests() {
+    local out
+    printf 'development build\n' >>"$PROJECT/README.md"
+    git -C "$PROJECT" commit -q -am "development package"
+    export APT_REPO_DIR="$APT"
+    out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests 2>&1)
+    assert_contains "apt-publish dist=tests" "$(calls)"
+    assert_matches "demo_1.2.3~dev\.[0-9]+\+g[0-9a-f]+_all\.deb" "$(calls)"
+    assert_not_contains "gh " "$(calls)"
+    assert_not_contains "version tag" "$out"
+}
+
+function test_tests_option_requires_publishing() {
+    local out
+    out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --tests 2>&1)
+    assert_contains "--tests requires --publish" "$out"
+}
