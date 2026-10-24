@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.1.9
 
 - bump magicoli/bash-tools to 1.0.8
