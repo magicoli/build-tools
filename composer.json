@@ -10,7 +10,7 @@
         }
     ],
     "require": {
-        "magicoli/bash-tools": "^1.0.6"
+        "magicoli/bash-tools": "@dev"
     },
     "bin": [
         "bin/build-tools",
