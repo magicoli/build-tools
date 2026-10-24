@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- bump magicoli/bash-tools to 1.0.8
+
 ### 0.1.8
 
 - feature(apt): route package releases by component

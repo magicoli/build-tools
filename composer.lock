@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "magicoli/bash-tools",
-            "version": "1.0.6",
+            "version": "1.0.8",
             "source": {
                 "type": "git",
                 "url": "https://github.com/magicoli/bash-tools.git",
-                "reference": "b4425142a024b9413686e19e126d1c256b32a8cb"
+                "reference": "a16f77a44c17ea457a66af81e68e69e2b53fdfdd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/magicoli/bash-tools/zipball/b4425142a024b9413686e19e126d1c256b32a8cb",
-                "reference": "b4425142a024b9413686e19e126d1c256b32a8cb",
+                "url": "https://api.github.com/repos/magicoli/bash-tools/zipball/a16f77a44c17ea457a66af81e68e69e2b53fdfdd",
+                "reference": "a16f77a44c17ea457a66af81e68e69e2b53fdfdd",
                 "shasum": ""
             },
             "bin": [
@@ -53,9 +53,9 @@
             "description": "Eclectic collection of bash tools and helpers.",
             "support": {
                 "issues": "https://github.com/magicoli/bash-tools/issues",
-                "source": "https://github.com/magicoli/bash-tools/tree/1.0.6"
+                "source": "https://github.com/magicoli/bash-tools/tree/1.0.8"
             },
-            "time": "2026-10-05T15:18:25+00:00"
+            "time": "2026-10-24T00:18:23+00:00"
         }
     ],
     "packages-dev": [],
