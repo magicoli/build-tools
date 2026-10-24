@@ -54,7 +54,7 @@ function test_the_question_shows_one_report_of_what_will_be_published() {
     assert_contains "  msg: v1.0.0
        - new: the first thing" "$out"
     assert_contains "  assets: zip, deb (demo)" "$out"
-    assert_contains "  targets: host.example.test (stable), github.com/owner/demo" "$out"
+    assert_contains "  targets: host.example.test (main/stable), github.com/owner/demo" "$out"
     assert_not_contains "to do" "$out"
     assert_not_contains "1.0.1-dev" "$out"
     assert_equals "1" "$(grep -c 'preparing to publish' <<<"$out")"
@@ -267,13 +267,13 @@ function test_a_release_in_progress_is_finished_not_replaced() {
     assert_not_contains "1.0.1-beta" "$(git -C "$PROJECT" tag)"
 }
 
-function test_a_pre_release_goes_to_the_suite_of_the_pre_releases() {
+function test_a_pre_release_goes_to_the_unstable_component() {
     local out
     tag_last_release 1.0.0
     unset RELEASE_YES
-    out=$(APT_REPO_PRERELEASE_DIST=unstable release "n
+    out=$(APT_REPO_PRERELEASE_COMPONENT=unstable release "n
 " beta)
-    assert_contains "  targets: host.example.test (unstable), github.com/owner/demo" "$out"
+    assert_contains "  targets: host.example.test (main/unstable), github.com/owner/demo" "$out"
 }
 
 function test_the_report_lists_the_packages_that_carry_the_version_of_the_project() {

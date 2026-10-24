@@ -51,26 +51,35 @@ function test_a_setting_comes_from_the_environment_else_from_the_repository() {
     assert_equals "other.example.test" "$(APT_REPO_HOST=other.example.test bash -c "source '$ROOT/src/lib/helpers'; apt_setting APT_REPO_HOST" </dev/null)"
 }
 
-function test_the_prereleases_go_to_their_suite_when_the_repository_has_one() {
+function test_the_prereleases_go_to_their_component_when_the_repository_has_one() {
     export APT_REPO_DIR="$APT"
-    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3" </dev/null)"
-    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3~beta.1" </dev/null)"
-    assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3~beta.1" </dev/null)"
-    assert_equals "unstable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.4~dev.5+gabc" </dev/null)"
-    assert_equals "stable" "$(APT_REPO_PRERELEASE_DIST=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of 1.2.3" </dev/null)"
+    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_component_of 1.2.3" </dev/null)"
+    assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_component_of 1.2.3~beta.1" </dev/null)"
+    assert_equals "unstable" "$(APT_REPO_PRERELEASE_COMPONENT=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_component_of 1.2.3~beta.1" </dev/null)"
+    assert_equals "unstable" "$(APT_REPO_PRERELEASE_COMPONENT=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_component_of 1.2.4~dev.5+gabc" </dev/null)"
+    assert_equals "stable" "$(APT_REPO_PRERELEASE_COMPONENT=unstable bash -c "source '$ROOT/src/lib/helpers'; apt_component_of 1.2.3" </dev/null)"
 }
 
 # The version of a tag (3.0.0-beta.5) and the one of a package (3.0.0~beta.5) are both pre-releases; a number after the -
 # is the revision of Debian
 function test_a_name_after_the_hyphen_is_a_pre_release_and_a_number_is_not() {
     local version
-    export APT_REPO_DIR="$APT" APT_REPO_PRERELEASE_DIST=unstable
+    export APT_REPO_DIR="$APT" APT_REPO_PRERELEASE_COMPONENT=unstable
     for version in 3.0.0-beta.5 1.0.0-rc.2 1.0.0-rc 1.0.0-alpha.1 1.2.3-dev.5 1.2.3~dev.5+gabc 3.0.0~beta.5; do
-        assert_equals "unstable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of $version" </dev/null)"
+        assert_equals "unstable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_component_of $version" </dev/null)"
     done
     for version in 0.9.3.0-1 88-1 1.0-1ubuntu2 3.0.0 1.1.3; do
-        assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_dist_of $version" </dev/null)"
+        assert_equals "stable" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_component_of $version" </dev/null)"
     done
+}
+
+function test_package_names_follow_the_repository_route_rules() {
+    export APT_REPO_DIR="$APT"
+    assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core-cli" </dev/null)"
+    assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core" </dev/null)"
+    assert_equals wrap "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of wrap-cms" </dev/null)"
+    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools" </dev/null)"
+    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of headless-kiosk" </dev/null)"
 }
 
 function test_a_pre_release_stays_in_its_series_and_a_stable_one_moves_on() {

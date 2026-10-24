@@ -10,7 +10,8 @@
 #   APT_REPO_DIR   the local clone of the repository (conf/, db/, public/): required
 #   APT_REPO_HOST  ssh host serving the repository (e.g. apt.example.com)
 #   APT_REPO_PATH  git clone of the repository on that host (e.g. /var/www/apt-repo)
-#   APT_REPO_DIST  suite (default: stable)
+#   APT_REPO_DIST       codename (default: main)
+#   APT_REPO_COMPONENT  component (default: stable)
 #
 # The packages are added to the clone with reprepro, which signs suites configured with SignWith in conf/distributions
 # (it asks for the passphrase). The clone is updated first, then committed and pushed, and the host pulls it. The tests
@@ -30,7 +31,9 @@ REPO_DIR=${APT_REPO_DIR:-}
 APT_REPO_HOST=$(apt_setting APT_REPO_HOST)
 APT_REPO_PATH=$(apt_setting APT_REPO_PATH)
 APT_REPO_DIST=$(apt_setting APT_REPO_DIST)
-APT_REPO_DIST=${APT_REPO_DIST:-stable}
+APT_REPO_DIST=${APT_REPO_DIST:-main}
+APT_REPO_COMPONENT=$(apt_setting APT_REPO_COMPONENT)
+APT_REPO_COMPONENT=${APT_REPO_COMPONENT:-stable}
 [[ -n "$APT_REPO_HOST" ]] || die "APT_REPO_HOST is not set (the ssh host serving the repository, in .env or in the one of the repository)"
 [[ -n "$APT_REPO_PATH" ]] || die "APT_REPO_PATH is not set (the clone of the repository on that host, in .env or in the one of the repository)"
 
@@ -51,7 +54,7 @@ git -C "$REPO_DIR" pull -q --rebase --autostash
 git -C "$REPO_DIR" push -q
 
 if [[ $resume == false ]]; then
-    reprepro -b "$REPO_DIR" includedeb "$APT_REPO_DIST" "$@" 2>&1 | tee "$TMP.reprepro"
+    reprepro -b "$REPO_DIR" -C "$APT_REPO_COMPONENT" includedeb "$APT_REPO_DIST" "$@" 2>&1 | tee "$TMP.reprepro"
     status=${PIPESTATUS[0]}
     if [[ $status != 0 ]]; then
         if grep -q "Could not finish exporting" "$TMP.reprepro"; then
@@ -85,4 +88,4 @@ fi
 
 ssh "$APT_REPO_HOST" "git -C $(printf %q "$APT_REPO_PATH") pull -q --ff-only"
 
-success "Published ${names:-the indices} to $APT_REPO_HOST:$APT_REPO_PATH ($APT_REPO_DIST)"
+success "Published ${names:-the indices} to $APT_REPO_HOST:$APT_REPO_PATH ($APT_REPO_DIST/$APT_REPO_COMPONENT)"

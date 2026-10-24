@@ -153,7 +153,7 @@ family=
 
 # What is about to be published, in one report; what a previous run already did is said on one line
 show_plan() {
-	local lines assets=zip publication=github.com/$repo steps=() report done_steps names others=
+	local lines assets=zip publication=github.com/$repo steps=() report done_steps names others= first_package
 	if [[ $published == 1 ]]; then
 		log "$project $new is published: https://github.com/$repo/releases/tag/$tag"
 		return
@@ -167,7 +167,9 @@ show_plan() {
 		names=$(carrying_version | paste -sd, - | sed 's/,/, /g')
 		[[ -z "$names" ]] || assets+=", deb ($names)"
 		others=$(own_version | paste -sd, - | sed 's/,/, /g')
-		publication="$(apt_setting APT_REPO_HOST) ($(apt_dist_of "$new")), $publication"
+		first_package=$(carrying_version | head -1)
+		[[ -n "$first_package" ]] || first_package=$(basename "$(ls packaging/*.yaml | head -1)" .yaml)
+		publication="$(apt_setting APT_REPO_HOST) ($(apt_codename_of "$first_package")/$(apt_component_of "$new")), $publication"
 	fi
 	report="preparing to publish $project $new"
 	report+=$'\n'$(printf '  %s %s' "tag:" "$tag")

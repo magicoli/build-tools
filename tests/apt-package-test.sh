@@ -59,17 +59,17 @@ function test_it_does_not_publish_without_a_repository() {
     assert_contains "APT_REPO_DIR is not set" "$out"
 }
 
-function test_the_prereleases_go_to_their_own_suite() {
+function test_the_prereleases_go_to_their_component_and_packages_route_by_name() {
     printf 'name: stable-one\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/stable-one.yaml"
     printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "two more packages"
     git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
-    export APT_REPO_PRERELEASE_DIST=unstable
+    export APT_REPO_PRERELEASE_COMPONENT=unstable
     (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
-    assert_contains "apt-publish dist=stable " "$(calls)"
-    assert_contains "stable-one_1.0.0_all.deb" "$(grep 'dist=stable ' "$STUB_LOG")"
-    assert_contains "apt-publish dist=unstable pre-one_2.0.0~beta.1_all.deb" "$(calls)"
+    assert_contains "apt-publish dist=main component=stable " "$(calls)"
+    assert_contains "stable-one_1.0.0_all.deb" "$(grep 'dist=main component=stable ' "$STUB_LOG")"
+    assert_contains "apt-publish dist=main component=unstable pre-one_2.0.0~beta.1_all.deb" "$(calls)"
 }
 
 function test_a_revision_of_debian_stays_in_the_suite_of_the_releases() {
@@ -77,10 +77,10 @@ function test_a_revision_of_debian_stays_in_the_suite_of_the_releases() {
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "a package with a revision"
     git -C "$PROJECT" tag -a v1.2.5 -m "v1.2.5"
-    export APT_REPO_PRERELEASE_DIST=unstable
+    export APT_REPO_PRERELEASE_COMPONENT=unstable
     (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
-    assert_contains "rev-one_0.9.3.0-1_all.deb" "$(grep 'dist=stable ' "$STUB_LOG")"
-    assert_not_contains "rev-one" "$(grep 'dist=unstable ' "$STUB_LOG" || true)"
+    assert_contains "rev-one_0.9.3.0-1_all.deb" "$(grep 'dist=main component=stable ' "$STUB_LOG")"
+    assert_not_contains "rev-one" "$(grep 'component=unstable ' "$STUB_LOG" || true)"
 }
 
 function test_a_package_already_in_another_suite_is_not_published_again() {
@@ -89,22 +89,35 @@ function test_a_package_already_in_another_suite_is_not_published_again() {
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "a pre-release"
     git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
-    export APT_REPO_PRERELEASE_DIST=unstable
+    export APT_REPO_PRERELEASE_COMPONENT=unstable
     # It went to stable once: the pool is one, the same file name cannot be added again with another content
-    echo "stable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
+    echo "main stable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
     out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish 2>&1)
     assert_contains "Already published: pre-one_2.0.0~beta.1_all.deb" "$out"
     assert_not_contains "pre-one" "$(grep '^apt-publish' "$STUB_LOG" || true)"
 }
 
-function test_without_a_prerelease_suite_all_go_to_the_same_one() {
+function test_without_a_prerelease_component_all_go_to_the_stable_component() {
     printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "a pre-release"
     git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
     (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
     assert_equals "1" "$(grep -c '^apt-publish' "$STUB_LOG")"
-    assert_contains "dist=stable" "$(grep '^apt-publish' "$STUB_LOG")"
+    assert_contains "dist=main component=stable" "$(grep '^apt-publish' "$STUB_LOG")"
+}
+
+function test_packages_are_routed_by_name_to_configured_codenames() {
+    printf 'name: core-cli\narch: all\nversion: 3.0.0\n' >"$PROJECT/packaging/core-cli.yaml"
+    printf 'name: wrap-tools\narch: all\nversion: 3.0.0\n' >"$PROJECT/packaging/wrap-tools.yaml"
+    printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "route packages"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains "dist=core component=stable core-cli_3.0.0_all.deb" "$(calls)"
+    assert_contains "dist=wrap component=stable wrap-tools_3.0.0_all.deb" "$(calls)"
+    assert_contains "dist=main component=stable bash-tools_1.0.0_all.deb" "$(calls)"
 }
 
 function test_tests_option_publishes_untagged_development_packages_to_tests() {
@@ -113,7 +126,7 @@ function test_tests_option_publishes_untagged_development_packages_to_tests() {
     git -C "$PROJECT" commit -q -am "development package"
     export APT_REPO_DIR="$APT"
     out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests 2>&1)
-    assert_contains "apt-publish dist=tests" "$(calls)"
+    assert_contains "apt-publish dist=tests component=tests" "$(calls)"
     assert_matches "demo_1.2.3~dev\.[0-9]+\+g[0-9a-f]+_all\.deb" "$(calls)"
     assert_not_contains "gh " "$(calls)"
     assert_not_contains "version tag" "$out"

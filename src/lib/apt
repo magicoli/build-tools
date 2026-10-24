@@ -1,7 +1,6 @@
-# What the commands know of an apt repository: its settings and the suite a version goes to. Sourced by helpers, not run.
+# What the commands know of an apt repository: its settings and the component a version goes to. Sourced by helpers.
 
-# A setting of the repository (APT_REPO_HOST, APT_REPO_PATH, APT_REPO_DIST, APT_REPO_PRERELEASE_DIST): the environment (the
-# .env of the project) wins, else the .env of the repository
+# A setting of the repository: the environment (the .env of the project) wins, else the .env of the repository.
 apt_setting() { # name
     if [[ -n "${!1:-}" ]]; then
         printf '%s' "${!1}"
@@ -15,16 +14,33 @@ apt_setting() { # name
     )
 }
 
-# The suite a version goes to: the pre-releases to APT_REPO_PRERELEASE_DIST when the repository has one, the others to
-# APT_REPO_DIST (default stable). A pre-release has a ~ (1.2.3~beta.1, as in a package) or a name after the - (1.2.3-beta.1,
-# as in a tag: dev, alpha, beta, rc). What is only a number after the - is the revision of Debian (0.9.3.0-1), not one
-apt_dist_of() { # version
-    local pre
-    pre=$(apt_setting APT_REPO_PRERELEASE_DIST)
+# The component for a version. A pre-release has a ~ (1.2.3~beta.1) or a name after the - (1.2.3-beta.1), not a number
+# (0.9.3.0-1 is a Debian revision).
+apt_component_of() { # version
+    local pre stable
+    stable=$(apt_setting APT_REPO_COMPONENT)
+    stable=${stable:-stable}
+    pre=$(apt_setting APT_REPO_PRERELEASE_COMPONENT)
     if [[ ($1 == *~* || $1 =~ -[^0-9]) && -n "$pre" ]]; then
         echo "$pre"
     else
-        pre=$(apt_setting APT_REPO_DIST)
-        echo "${pre:-stable}"
+        echo "$stable"
     fi
 }
+
+# Resolve a package name using the ordered rules in conf/package-routes.
+apt_codename_of() { # package
+    local pattern codename
+    [[ -r "${APT_REPO_DIR:-}/conf/package-routes" ]] || { echo main; return; }
+    while read -r pattern codename || [[ -n "$pattern" ]]; do
+        [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+        if [[ "$1" == $pattern ]]; then
+            echo "$codename"
+            return
+        fi
+    done <"$APT_REPO_DIR/conf/package-routes"
+    echo main
+}
+
+apt_tests_codename() { local value; value=$(apt_setting APT_REPO_TESTS_DIST); echo "${value:-tests}"; }
+apt_tests_component() { local value; value=$(apt_setting APT_REPO_TESTS_COMPONENT); echo "${value:-tests}"; }

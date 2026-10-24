@@ -4,15 +4,17 @@
 # Usage, from anywhere in the project:
 #   apt-package [package...]             build into dist/
 #   apt-package --publish [package...]   build and publish with apt-publish, and on GitHub
-#   apt-package --publish --tests [package...]  publish to APT suite tests, without a GitHub release
+#   apt-package --publish --tests [package...]  publish to the configured test distribution, without a GitHub release
 #
 # The project describes each package in its own packaging/<package>.yaml file. All are built, or only the ones named.
 # Where to publish is not known here: it is in the .env of the project, and the .env of the apt repository for what the
 # project leaves out:
 #   APT_REPO_DIR              the local clone of the apt repository (conf/distributions, db, public): required to publish
-#   APT_REPO_DIST             the suite of the releases (default: stable)
-#   APT_REPO_PRERELEASE_DIST  the suite of the pre-releases, the versions with a ~ (1.2.3~beta.1), when the repository has
-#                             one (default: the same as the releases)
+#   conf/package-routes       ordered package-name patterns and destination codenames
+#   APT_REPO_COMPONENT        component for stable versions (default: stable)
+#   APT_REPO_PRERELEASE_COMPONENT component for pre-releases (default: stable)
+#   APT_REPO_TESTS_DIST       codename for --tests (default: tests)
+#   APT_REPO_TESTS_COMPONENT  component for --tests (default: dev)
 #   DEB_MAINTAINER  maintainer, e.g. "Name <maintainer@example.com>", DEB_VENDOR vendor, DEB_URL homepage: for the
 #                   fields a definition leaves out
 # (the host and the path the repository is published to are the business of apt-publish, see there)
@@ -161,15 +163,18 @@ if [[ -f build/packaging.env ]]; then
 fi
 mkdir -p dist
 
-# The suite of a package file (name_version_arch.deb): the pre-releases, a ~ in the version, go to
-# APT_REPO_PRERELEASE_DIST when there is one, the others to APT_REPO_DIST
-dist_of() {
-    local file version
-    $TESTS && { echo tests; return; }
+# The codename and component for a package file.
+target_of() {
+    local file name version
+    if $TESTS; then
+        printf '%s|%s\n' "$(apt_tests_codename)" "$(apt_tests_component)"
+        return
+    fi
     file=$(basename "$1" .deb)
+    name=${file%%_*}
     version=${file#*_}
     version=${version%_*}
-    apt_dist_of "$version"
+    printf '%s|%s\n' "$(apt_codename_of "$name")" "$(apt_component_of "$version")"
 }
 
 # Whether the repository already has this package file (name_version_arch.deb), in any suite: the pool is one, a file of that name
@@ -227,19 +232,22 @@ if $PUBLISH; then
         exit 0
     fi
 
-    # One call of apt-publish by suite; it updates the clone again, right before changing it
-    for dist in $(for deb in "${DEBS[@]}"; do dist_of "$deb"; done | sort -u); do
+    # One call per codename and component; apt-publish updates the clone before changing it.
+    for target in $(for deb in "${DEBS[@]}"; do target_of "$deb"; done | sort -u); do
+        IFS='|' read -r dist component <<<"$target"
         group=()
         for deb in "${DEBS[@]}"; do
-            [[ "$(dist_of "$deb")" != "$dist" ]] || group+=("$deb")
+            [[ "$(target_of "$deb")" != "$target" ]] || group+=("$deb")
         done
-        APT_REPO_DIST=$dist "${APT_PUBLISH:-$BIN_DIR/apt-publish}" "${group[@]}"
+        APT_REPO_DIST=$dist APT_REPO_COMPONENT=$component "${APT_PUBLISH:-$BIN_DIR/apt-publish}" "${group[@]}"
     done
 
     if [[ -n "$GITHUB_REPO" && ${#RELEASE_DEBS[@]} -gt 0 ]]; then
         # Checksums signed with the key of the repository, whose passphrase
         # the agent still has
-        sign_key=$(awk -v dist="$(dist_of "${RELEASE_DEBS[0]}")" '
+        sign_target=$(target_of "${RELEASE_DEBS[0]}")
+        sign_dist=${sign_target%%|*}
+        sign_key=$(awk -v dist="$sign_dist" '
             $1 == "Codename:" { codename = $2 }
             $1 == "SignWith:" && codename == dist { print $2; exit }
         ' "$REPO_DIR/conf/distributions")

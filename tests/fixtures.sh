@@ -46,14 +46,17 @@ STUB
 #!/usr/bin/env bash
 echo "reprepro $*" >>"$STUB_LOG"
 repo=$2
-case "$3" in
+shift 2
+component=main
+while [[ ${1:-} == -C || ${1:-} == --component ]]; do component=$2; shift 2; done
+case "$1" in
     includedeb)
-        dist=$4
-        shift 4
+        dist=$2
+        shift 2
         for deb in "$@"; do
             mkdir -p "$repo/public/pool/main/x"
             cp "$deb" "$repo/public/pool/main/x/"
-            echo "$dist $(basename "$deb")" >>"$repo/db/packages.db"
+            echo "$dist $component $(basename "$deb")" >>"$repo/db/packages.db"
         done
         if [[ -n "${REPREPRO_FAIL_INCLUDE:-}" && ! -f "$STUB_STATE/include.failed" ]]; then
             : >"$STUB_STATE/include.failed"
@@ -61,7 +64,7 @@ case "$3" in
             echo "ERROR: Could not finish exporting '$dist'!" >&2
             exit 1
         fi
-        mkdir -p "$repo/public/dists/$dist"
+        mkdir -p "$repo/public/dists/$dist/$component"
         echo exported >"$repo/public/dists/$dist/Release"
         ;;
     export)
@@ -71,12 +74,12 @@ case "$3" in
             echo "gpgme gave error Pinentry:62:  Timeout" >&2
             exit 1
         fi
-        mkdir -p "$repo/public/dists/stable"
-        echo exported >"$repo/public/dists/stable/Release"
+        mkdir -p "$repo/public/dists/main/stable"
+        echo exported >"$repo/public/dists/main/Release"
         ;;
     list)
-        # what includedeb put in the database: "<suite> <file>" -> "<suite>|main|all: <name> <version>"
-        awk -v d="$4" -v n="$5" '$1 == d { f = $2; sub(/\.deb$/, "", f); name = f; sub(/_.*/, "", name); ver = f; sub(/^[^_]*_/, "", ver); sub(/_[^_]*$/, "", ver); if (name == n) print d "|main|all: " n " " ver }' "$repo/db/packages.db"
+        # what includedeb put in the database: "<codename> <component> <file>".
+        awk -v d="$2" -v n="$3" '$1 == d { f = $3; sub(/\.deb$/, "", f); name = f; sub(/_.*/, "", name); ver = f; sub(/^[^_]*_/, "", ver); sub(/_[^_]*$/, "", ver); if (name == n) print d "|" $2 "|all: " n " " ver }' "$repo/db/packages.db"
         ;;
 esac
 exit 0
@@ -121,7 +124,7 @@ STUB
     # apt-publish, for apt-package (APT_PUBLISH): it only says with which suite it is called
     cat >"$WORK/bin/apt-publish-stub" <<'STUB'
 #!/usr/bin/env bash
-echo "apt-publish dist=${APT_REPO_DIST:-} $(basename -a "$@" | tr '\n' ' ')" >>"$STUB_LOG"
+echo "apt-publish dist=${APT_REPO_DIST:-} component=${APT_REPO_COMPONENT:-} $(basename -a "$@" | tr '\n' ' ')" >>"$STUB_LOG"
 STUB
     chmod +x "$WORK"/bin/*
     export PATH="$WORK/bin:$PATH"
@@ -131,7 +134,8 @@ STUB
 make_apt_repo() {
     APT="$WORK/apt"
     mkdir -p "$APT/conf" "$APT/db" "$APT/public"
-    printf 'Codename: stable\nSuite: stable\nSignWith: TESTKEY0001\n\nCodename: unstable\nSuite: unstable\nSignWith: TESTKEY0001\n\nCodename: tests\nSuite: tests\n' >"$APT/conf/distributions"
+    printf 'Codename: core\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: wrap\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: main\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: tests\nComponents: tests\n' >"$APT/conf/distributions"
+    printf 'core* core\nwrap* wrap\n* main\n' >"$APT/conf/package-routes"
     printf 'APT_REPO_HOST=host.example.test\nAPT_REPO_PATH="/srv/apt test"\n' >"$APT/.env"
     : >"$APT/db/packages.db"
     git init -q -b main "$APT"
@@ -180,7 +184,7 @@ new_work() {
 drop_work() {
     rm -rf "$WORK"
     unset STUB_LOG STUB_STATE APT_REPO_DIR BUILD_NAME RELEASE_GITHUB_REPO RELEASE_YES APT_PACKAGE APT_PUBLISH \
-        FAIL_GH_CREATE GPG_FAIL_FIRST REPREPRO_FAIL_INCLUDE REPREPRO_FAIL_EXPORT APT_FAIL_ONCE APT_REPO_PRERELEASE_DIST APT_REPO_DIST \
+        FAIL_GH_CREATE GPG_FAIL_FIRST REPREPRO_FAIL_INCLUDE REPREPRO_FAIL_EXPORT APT_FAIL_ONCE APT_REPO_PRERELEASE_COMPONENT APT_REPO_COMPONENT APT_REPO_DIST APT_REPO_TESTS_DIST APT_REPO_TESTS_COMPONENT \
         APT_REPO_HOST APT_REPO_PATH
 }
 

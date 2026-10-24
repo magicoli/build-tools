@@ -25,7 +25,7 @@ It brings [bash-tools](https://github.com/magicoli/bash-tools), whose functions 
 | `build-tools switch dev\|release` | the projects of the family linked next to this one (dev), or required by version from Packagist (release)                           |
 | `build-tools stage DIR deb\|zip`  | the files a package or a zip holds, in DIR                                                                                          |
 | `build-tools version`             | the version of this build, as `VERSION=` and `DEB_VERSION=` lines                                                                    |
-| `apt-package [--publish] [--tests]` | builds the Debian packages of `packaging/*.yaml` and publishes them; `--tests` targets the APT `tests` suite for development builds |
+| `apt-package [--publish] [--tests]` | builds the Debian packages of `packaging/*.yaml` and publishes them; `--tests` targets the configured unsigned test distribution |
 | `apt-publish PACKAGE.deb…`        | adds packages to an apt repository and publishes it; `--resume` publishes what a failed signature left pending                       |
 
 ### In a project
@@ -62,7 +62,7 @@ exec "$tool" release "$@"
 | `dev`, `alpha`, `beta`, `rc` | the next number of the series; the first one (`.1`) on the same version when it is above the last release, on the next patch when it is not |
 | `1.2.3-beta.4` | that version, which must be above the last release |
 
-The rungs, from the lowest: `dev`, `alpha`, `beta`, `rc`, stable. Only a stable release moves to the next patch. Pre-releases are GitHub pre-releases, and go to `APT_REPO_PRERELEASE_DIST` when the apt repository has that suite. The first release of a project is its version in progress (`.version`, `composer.json`), or the one given.
+The rungs, from the lowest: `dev`, `alpha`, `beta`, `rc`, stable. Only a stable release moves to the next patch. Pre-releases are GitHub pre-releases, and go to `APT_REPO_PRERELEASE_COMPONENT`. The package codename is selected by the ordered rules in the repository's `conf/package-routes`. The first release of a project is its version in progress (`.version`, `composer.json`), or the one given.
 
 Debian sorts the names of the rungs alphabetically, as semver does: `alpha` < `beta` < `dev` < `rc`. A `dev` version sorts above `alpha` and `beta` of the same number in apt. Number the series the same way (`rc.1`, `rc.2`): `rc3` sorts before `rc.2`.
 
@@ -76,13 +76,15 @@ no default repository: a project that publishes says where, and different projec
 | `APT_REPO_DIR`             | the local clone of the apt repository (`conf/distributions`, `db`, `public`)                  |
 | `APT_REPO_HOST`            | the ssh host serving it                                                                       |
 | `APT_REPO_PATH`            | its clone on that host                                                                        |
-| `APT_REPO_DIST`            | the suite of the releases (default `stable`)                                                  |
-| `APT_REPO_PRERELEASE_DIST` | the suite of the pre-releases, the versions with a `~` (default: the same as the releases)    |
+| `APT_REPO_COMPONENT` | component for stable versions (default `stable`) |
+| `APT_REPO_PRERELEASE_COMPONENT` | component for pre-releases (default `stable`) |
+| `APT_REPO_TESTS_DIST` | codename for `apt-package --publish --tests` (default `tests`) |
+| `APT_REPO_TESTS_COMPONENT` | component for `--tests` (default `tests`) |
 | `DEB_MAINTAINER`, `DEB_VENDOR`, `DEB_URL` | the fields a package definition leaves out                                     |
 | `RELEASE_REMOTE`           | the remote tags and releases are pushed to (default `github`)                                 |
 
-The host, the path and the suites can also be in the `.env` of the apt repository itself, shared by the projects that publish to
-it; the one of the project wins.
+The host, path and component settings can also be in the `.env` of the apt repository itself, shared by the projects that publish to
+it; the one of the project wins. Package routing is kept in the repository's committed `conf/package-routes` file.
 
 A release shows what it will publish (tag, message, assets, publication) and asks one question, one key. It then asks the
 passphrase of the key, before anything is pushed; when a prompt times out because nobody was there, the failure is said and
