@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.1.7
 
 - new `--tests` as an explicit suite override for APT publication
