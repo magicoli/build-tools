@@ -2,6 +2,9 @@
 
 ### Unreleased
 
+- feature(apt): route package releases by component
+- refactor(apt): route packages by codename and component
+
 ### 0.1.7
 
 - new `--tests` as an explicit suite override for APT publication

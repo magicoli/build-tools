@@ -32,9 +32,14 @@ function test_it_has_no_host_of_its_own() {
 
 function test_it_publishes_to_the_host_the_settings_name() {
     (cd "$WORK" && "$ROOT/bin/apt-publish" demo_1.0.0_all.deb >/dev/null 2>&1)
-    assert_equals "add demo_1.0.0_all.deb" "$(git -C "$APT" log -1 --format=%s)"
+    assert_equals "add demo_1.0.0_all.deb to main/stable" "$(git -C "$APT" log -1 --format=%s)"
     assert_equals "$(git -C "$APT" rev-parse HEAD)" "$(git -C "$WORK/apt-origin.git" rev-parse main)"
     assert_contains "ssh host.example.test git -C /srv/apt\\ test pull -q --ff-only" "$(calls)"
+}
+
+function test_the_commit_names_the_destination() {
+    (cd "$WORK" && APT_REPO_DIST=charm-tests APT_REPO_COMPONENT=dev "$ROOT/bin/apt-publish" demo_1.0.0_all.deb >/dev/null 2>&1)
+    assert_equals "add demo_1.0.0_all.deb to charm-tests/dev" "$(git -C "$APT" log -1 --format=%s)"
 }
 
 function test_the_repository_env_gives_the_defaults_the_environment_wins() {
@@ -49,7 +54,7 @@ function test_a_signature_that_times_out_is_offered_again_and_the_publication_go
     status=$?
     assert_equals 0 "$status"
     assert_equals "2" "$(grep -c '^reprepro .* export' "$STUB_LOG")"
-    assert_equals "add demo_1.0.0_all.deb" "$(git -C "$APT" log -1 --format=%s)"
+    assert_equals "add demo_1.0.0_all.deb to main/stable" "$(git -C "$APT" log -1 --format=%s)"
     assert_contains "ssh host.example.test" "$(calls)"
 }
 
@@ -59,7 +64,7 @@ function test_resume_publishes_what_a_failed_signature_left_pending() {
     printf 'deb' >"$APT/public/pool/main/x/pending_2.0.0_all.deb"
     echo "stable pending_2.0.0_all.deb" >>"$APT/db/packages.db"
     (cd "$WORK" && "$ROOT/bin/apt-publish" --resume >/dev/null 2>&1)
-    assert_equals "add pending_2.0.0_all.deb" "$(git -C "$APT" log -1 --format=%s)"
+    assert_equals "add pending_2.0.0_all.deb to main/stable" "$(git -C "$APT" log -1 --format=%s)"
     assert_contains "reprepro -b $APT export" "$(calls)"
     assert_contains "ssh host.example.test" "$(calls)"
     assert_equals "$(git -C "$APT" rev-parse HEAD)" "$(git -C "$WORK/apt-origin.git" rev-parse main)"

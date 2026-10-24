@@ -60,6 +60,13 @@ function test_the_question_shows_one_report_of_what_will_be_published() {
     assert_equals "1" "$(grep -c 'preparing to publish' <<<"$out")"
 }
 
+function test_the_release_plan_shows_every_package_distribution() {
+    printf 'demo component=stable main charm\n* main\n' >"$APT/conf/package-routes"
+    local out
+    out=$(release "n")
+    assert_contains "  targets: host.example.test (main,charm/stable), github.com/owner/demo" "$out"
+}
+
 function test_the_report_says_what_a_previous_run_did() {
     local out
     FAIL_GH_CREATE=1 release "" >/dev/null

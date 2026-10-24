@@ -81,7 +81,7 @@ if git -C "$REPO_DIR" diff --cached --quiet -- db public; then
     log "Nothing to commit in the repository"
 else
     message="update the indices"
-    [[ -z "$names" ]] || message="add $names"
+    [[ -z "$names" ]] || message="add $names to $APT_REPO_DIST/$APT_REPO_COMPONENT"
     git -C "$REPO_DIR" commit -q -m "$message" -- db public
     git -C "$REPO_DIR" push -q
 fi

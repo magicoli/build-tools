@@ -10,7 +10,7 @@
 # Where to publish is not known here: it is in the .env of the project, and the .env of the apt repository for what the
 # project leaves out:
 #   APT_REPO_DIR              the local clone of the apt repository (conf/distributions, db, public): required to publish
-#   conf/package-routes       ordered package-name patterns and destination codenames
+#   conf/package-routes       ordered package-name patterns and destination codenames (space-separated)
 #   APT_REPO_COMPONENT        component for stable versions (default: stable)
 #   APT_REPO_PRERELEASE_COMPONENT component for pre-releases (default: stable)
 #   APT_REPO_TESTS_DIST       codename for --tests (default: tests)
@@ -165,7 +165,7 @@ mkdir -p dist
 
 # The codename and component for a package file.
 target_of() {
-    local file name version
+    local file name version component codename
     if $TESTS; then
         printf '%s|%s\n' "$(apt_tests_codename)" "$(apt_tests_component)"
         return
@@ -174,21 +174,33 @@ target_of() {
     name=${file%%_*}
     version=${file#*_}
     version=${version%_*}
-    printf '%s|%s\n' "$(apt_codename_of "$name")" "$(apt_component_of "$version")"
+    component=$(apt_component_of "$version")
+    while read -r codename; do
+        printf '%s|%s\n' "$codename" "$component"
+    done < <(tr ' ' '\n' <<<"$(apt_codenames_of "$name" "$component")")
 }
 
-# Whether the repository already has this package file (name_version_arch.deb), in any suite: the pool is one, a file of that name
-# cannot be added again with another content (a package built again is not the same file), whatever the suite it was added to
-published() {
-    local file name version codename
+# Whether this destination already has the package version. The same package may be routed to several codenames.
+published_in() {
+    local file name version codename=$2 component=$3
     file=$(basename "$1" .deb)
     name=${file%%_*}
     version=${file#*_}
     version=${version%_*}
-    for codename in $(awk '$1 == "Codename:" {print $2}' "$REPO_DIR/conf/distributions"); do
-        ! reprepro -b "$REPO_DIR" list "$codename" "$name" | grep -q ": $name $version\$" || return 0
-    done
-    return 1
+    reprepro -b "$REPO_DIR" list "$codename" "$name" | awk -F'|' -v c="$codename" -v p="$component" -v n="$name" -v v="$version" '
+        $1 == c && $2 == p { entry = $3; sub(/^[^:]*: /, "", entry); if (entry == n " " v) found = 1 }
+        END { exit !found }
+    '
+}
+
+published_everywhere() {
+    local deb=$1 target codename component found=0
+    while read -r target; do
+        IFS='|' read -r codename component <<<"$target"
+        found=1
+        published_in "$deb" "$codename" "$component" || return 1
+    done < <(target_of "$deb")
+    ((found))
 }
 
 # Each package definition, with the variables of the environment and the
@@ -217,7 +229,7 @@ for definition in "${CONFIGS[@]}"; do
         output=$(nfpm package --config "$config" --packager deb --target dist/)
         echo "$output"
         deb=$(sed -n 's/.*created package: //p' <<<"$output")
-        if $PUBLISH && published "$deb"; then
+        if $PUBLISH && published_everywhere "$deb"; then
             echo "Already published: $(basename "$deb")"
             continue
         fi
@@ -237,15 +249,26 @@ if $PUBLISH; then
         IFS='|' read -r dist component <<<"$target"
         group=()
         for deb in "${DEBS[@]}"; do
-            [[ "$(target_of "$deb")" != "$target" ]] || group+=("$deb")
+            grep -Fxq "$target" <(target_of "$deb") || continue
+            if published_in "$deb" "$dist" "$component"; then
+                echo "Already published: $(basename "$deb") ($dist/$component)"
+                continue
+            fi
+            group+=("$deb")
         done
+        [[ ${#group[@]} -eq 0 ]] && continue
         APT_REPO_DIST=$dist APT_REPO_COMPONENT=$component "${APT_PUBLISH:-$BIN_DIR/apt-publish}" "${group[@]}"
     done
+
+    if [[ ${#DEBS[@]} -eq 0 ]]; then
+        echo "Nothing to publish."
+        exit 0
+    fi
 
     if [[ -n "$GITHUB_REPO" && ${#RELEASE_DEBS[@]} -gt 0 ]]; then
         # Checksums signed with the key of the repository, whose passphrase
         # the agent still has
-        sign_target=$(target_of "${RELEASE_DEBS[0]}")
+        sign_target=$(target_of "${RELEASE_DEBS[0]}" | head -n 1)
         sign_dist=${sign_target%%|*}
         sign_key=$(awk -v dist="$sign_dist" '
             $1 == "Codename:" { codename = $2 }

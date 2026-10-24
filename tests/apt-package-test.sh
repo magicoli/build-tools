@@ -83,18 +83,28 @@ function test_a_revision_of_debian_stays_in_the_suite_of_the_releases() {
     assert_not_contains "rev-one" "$(grep 'component=unstable ' "$STUB_LOG" || true)"
 }
 
-function test_a_package_already_in_another_suite_is_not_published_again() {
+function test_a_package_already_in_its_target_is_not_published_again() {
     local out
     printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "a pre-release"
     git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
     export APT_REPO_PRERELEASE_COMPONENT=unstable
-    # It went to stable once: the pool is one, the same file name cannot be added again with another content
-    echo "main stable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
+    echo "main unstable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
     out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish 2>&1)
     assert_contains "Already published: pre-one_2.0.0~beta.1_all.deb" "$out"
     assert_not_contains "pre-one" "$(grep '^apt-publish' "$STUB_LOG" || true)"
+}
+
+function test_a_package_in_another_component_is_published_to_its_target() {
+    printf 'name: pre-one\narch: all\nversion: 2.0.0~beta.1\n' >"$PROJECT/packaging/pre-one.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "a pre-release"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    export APT_REPO_PRERELEASE_COMPONENT=unstable
+    echo "main stable pre-one_2.0.0~beta.1_all.deb" >>"$APT/db/packages.db"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains "apt-publish dist=main component=unstable pre-one_2.0.0~beta.1_all.deb" "$(calls)"
 }
 
 function test_without_a_prerelease_component_all_go_to_the_stable_component() {
@@ -118,6 +128,40 @@ function test_packages_are_routed_by_name_to_configured_codenames() {
     assert_contains "dist=core component=stable core-cli_3.0.0_all.deb" "$(calls)"
     assert_contains "dist=wrap component=stable wrap-tools_3.0.0_all.deb" "$(calls)"
     assert_contains "dist=main component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+    assert_contains "dist=charm component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+}
+
+function test_a_package_missing_from_one_destination_is_published_there_only() {
+    printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "route bash-tools"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    echo 'main stable bash-tools_1.0.0_all.deb' >>"$APT/db/packages.db"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_not_contains "dist=main component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+    assert_contains "dist=charm component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+}
+
+function test_a_package_in_another_component_is_not_treated_as_published() {
+    printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "route bash-tools"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    echo 'main unstable bash-tools_1.0.0_all.deb' >>"$APT/db/packages.db"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains "dist=main component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+    assert_contains "dist=charm component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+}
+
+function test_a_prerelease_with_a_stable_only_route_stays_in_its_default_distribution() {
+    printf 'name: bash-tools\narch: all\nversion: 1.0.0~beta.1\n' >"$PROJECT/packaging/bash-tools.yaml"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -q -m "route bash-tools prerelease"
+    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+    export APT_REPO_PRERELEASE_COMPONENT=unstable
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains "dist=main component=unstable bash-tools_1.0.0~beta.1_all.deb" "$(calls)"
+    assert_not_contains "dist=charm component=unstable" "$(calls)"
 }
 
 function test_tests_option_publishes_untagged_development_packages_to_tests() {

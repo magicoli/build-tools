@@ -62,7 +62,7 @@ exec "$tool" release "$@"
 | `dev`, `alpha`, `beta`, `rc` | the next number of the series; the first one (`.1`) on the same version when it is above the last release, on the next patch when it is not |
 | `1.2.3-beta.4` | that version, which must be above the last release |
 
-The rungs, from the lowest: `dev`, `alpha`, `beta`, `rc`, stable. Only a stable release moves to the next patch. Pre-releases are GitHub pre-releases, and go to `APT_REPO_PRERELEASE_COMPONENT`. The package codename is selected by the ordered rules in the repository's `conf/package-routes`. The first release of a project is its version in progress (`.version`, `composer.json`), or the one given.
+The rungs, from the lowest: `dev`, `alpha`, `beta`, `rc`, stable. Only a stable release moves to the next patch. Pre-releases are GitHub pre-releases, and go to `APT_REPO_PRERELEASE_COMPONENT`. The package codename is selected by the ordered rules in the repository's `conf/package-routes`. A rule may include a component (`pattern component=stable codename...`) and several codenames to publish the same package to more than one distribution for that component. The first release of a project is its version in progress (`.version`, `composer.json`), or the one given.
 
 Debian sorts the names of the rungs alphabetically, as semver does: `alpha` < `beta` < `dev` < `rc`. A `dev` version sorts above `alpha` and `beta` of the same number in apt. Number the series the same way (`rc.1`, `rc.2`): `rc3` sorts before `rc.2`.
 

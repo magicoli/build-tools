@@ -135,7 +135,7 @@ make_apt_repo() {
     APT="$WORK/apt"
     mkdir -p "$APT/conf" "$APT/db" "$APT/public"
     printf 'Codename: core\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: wrap\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: main\nComponents: stable unstable\nSignWith: TESTKEY0001\n\nCodename: tests\nComponents: tests\n' >"$APT/conf/distributions"
-    printf 'core* core\nwrap* wrap\n* main\n' >"$APT/conf/package-routes"
+    printf 'core* core\nwrap* wrap\nbash-tools component=stable main charm\n* main\n' >"$APT/conf/package-routes"
     printf 'APT_REPO_HOST=host.example.test\nAPT_REPO_PATH="/srv/apt test"\n' >"$APT/.env"
     : >"$APT/db/packages.db"
     git init -q -b main "$APT"

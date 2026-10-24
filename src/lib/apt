@@ -29,17 +29,30 @@ apt_component_of() { # version
 }
 
 # Resolve a package name using the ordered rules in conf/package-routes.
-apt_codename_of() { # package
-    local pattern codename
+# A component-qualified rule has: pattern component=<name> codename [codename...].
+apt_codenames_of() { # package [component]
+    local pattern second destinations route_component component=${2:-$(apt_setting APT_REPO_COMPONENT)}
+    component=${component:-stable}
     [[ -r "${APT_REPO_DIR:-}/conf/package-routes" ]] || { echo main; return; }
-    while read -r pattern codename || [[ -n "$pattern" ]]; do
+    while read -r pattern second destinations || [[ -n "${pattern:-}" ]]; do
         [[ -z "$pattern" || "$pattern" == \#* ]] && continue
         if [[ "$1" == $pattern ]]; then
-            echo "$codename"
+            if [[ "$second" == component=* ]]; then
+                route_component=${second#component=}
+                [[ "$route_component" == "$component" ]] || continue
+                echo "$destinations"
+            else
+                echo "$second${destinations:+ $destinations}"
+            fi
             return
         fi
     done <"$APT_REPO_DIR/conf/package-routes"
     echo main
+}
+
+# The first destination is the display/default codename for older callers.
+apt_codename_of() { # package [component]
+    apt_codenames_of "$1" "${2:-}" | awk '{print $1}'
 }
 
 apt_tests_codename() { local value; value=$(apt_setting APT_REPO_TESTS_DIST); echo "${value:-tests}"; }

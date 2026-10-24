@@ -78,7 +78,9 @@ function test_package_names_follow_the_repository_route_rules() {
     assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core-cli" </dev/null)"
     assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core" </dev/null)"
     assert_equals wrap "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of wrap-cms" </dev/null)"
-    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools" </dev/null)"
+    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools stable" </dev/null)"
+    assert_equals "main charm" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codenames_of bash-tools stable" </dev/null)"
+    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools unstable" </dev/null)"
     assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of headless-kiosk" </dev/null)"
 }
 
