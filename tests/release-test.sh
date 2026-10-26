@@ -304,3 +304,65 @@ function test_a_tag_of_a_step_does_not_change_the_style_of_the_version_tags() {
     assert_contains "1.0.1" "$(git -C "$WORK/github.git" tag)"
     assert_not_contains "v1.0.1" "$(git -C "$WORK/github.git" tag)"
 }
+
+function test_read_only_github_access_stops_before_publication() {
+    export GH_READ_ONLY=1
+    local output status=0
+    output=$(cd "$PROJECT" && "$BT" release 2>&1) || status=$?
+    assert_not_equals 0 "$status"
+    assert_contains 'GitHub write access is required for owner/demo' "$output"
+    assert_not_contains 'gpg ' "$(calls)"
+    assert_not_contains 'gh release create' "$(calls)"
+    assert_equals '' "$(git -C "$PROJECT" tag)"
+}
+
+function test_tests_mode_publishes_without_creating_a_release() {
+    local before output
+    before=$(git -C "$PROJECT" rev-parse HEAD)
+    output=$(cd "$PROJECT" && "$BT" release --tests 2>&1)
+    assert_contains 'apt-package --publish --tests' "$(calls)"
+    assert_not_contains 'gh ' "$(calls)"
+    assert_not_contains 'gpg ' "$(calls)"
+    assert_equals '' "$(git -C "$PROJECT" tag)"
+    assert_equals "$before" "$(git -C "$PROJECT" rev-parse HEAD)"
+    assert_equals '1.0.0-dev' "$(cat "$PROJECT/.version")"
+}
+
+function test_tests_mode_requires_confirmation() {
+    unset RELEASE_YES
+    local output status=0
+    output=$(cd "$PROJECT" && printf 'n\n' | "$BT" release --tests 2>&1) || status=$?
+    assert_not_equals 0 "$status"
+    assert_contains 'stopped, nothing published' "$output"
+    assert_not_contains 'apt-package ' "$(calls)"
+}
+
+function test_test_release_loads_project_then_test_settings() {
+    mkdir -p "$PROJECT/tests"
+    printf 'APT_REPO_DIR="/project/repo"\nAPT_REPO_COMPONENT=project\n' >"$PROJECT/.env"
+    printf 'APT_REPO_DIR="/test/repo"\nAPT_REPO_COMPONENT=test\n' >"$PROJECT/tests/.env"
+    unset APT_REPO_DIR APT_REPO_COMPONENT
+    local output
+    output=$(cd "$PROJECT" && REPORT_APT_ENV=1 "$BT" release --tests 2>&1)
+    assert_contains 'repository=/test/repo component=test' "$output"
+}
+
+function test_inline_settings_override_both_files() {
+    mkdir -p "$PROJECT/tests"
+    printf 'APT_REPO_DIR="/project/repo"\nAPT_REPO_COMPONENT=project\n' >"$PROJECT/.env"
+    printf 'APT_REPO_DIR="/test/repo"\nAPT_REPO_COMPONENT=test\n' >"$PROJECT/tests/.env"
+    local output
+    output=$(cd "$PROJECT" && REPORT_APT_ENV=1 APT_REPO_DIR=/caller/repo APT_REPO_COMPONENT=caller "$BT" release --tests 2>&1)
+    assert_contains 'repository=/caller/repo component=caller' "$output"
+}
+
+function test_regular_release_reads_project_settings_only() {
+    mkdir -p "$PROJECT/tests"
+    printf 'APT_REPO_DIR="%s"\nAPT_REPO_COMPONENT=project\n' "$APT" >"$PROJECT/.env"
+    printf 'APT_REPO_DIR="/test/repo"\nAPT_REPO_COMPONENT=test\n' >"$PROJECT/tests/.env"
+    unset APT_REPO_DIR APT_REPO_COMPONENT
+    local output
+    output=$(cd "$PROJECT" && APP_ENV=default "$BT" release status 2>&1)
+    assert_contains '(main/project)' "$output"
+    assert_not_contains '(main/test)' "$output"
+}

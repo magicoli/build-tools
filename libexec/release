@@ -20,7 +20,14 @@
 # RELEASE_YES=1 answers yes to the question.
 
 set -e
+RELEASE_ARGS=("$@")
+RELEASE_ENVIRONMENT=$(export -p)
 source "$(dirname "$(realpath "$0")")/../src/lib/common"
+set -- "${RELEASE_ARGS[@]}"
+release_settings=("$BUILD_PROJECT/.env")
+[[ ${1:-} != --tests ]] || release_settings+=("$BUILD_PROJECT/tests/.env")
+load_build_environment "$RELEASE_ENVIRONMENT" "${release_settings[@]}"
+unset RELEASE_ENVIRONMENT release_settings
 
 remote=${RELEASE_REMOTE:-github}
 gh=${GH:-gh}
@@ -104,6 +111,14 @@ restore() {
 [[ -f CHANGELOG.md ]] || die "no CHANGELOG.md: its section ### Unreleased is the release message"
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "uncommitted changes, commit them first:
 $(git status --short --untracked-files=no)"
+
+if [[ ${1:-} == --tests ]]; then
+    shift
+    packaged || die "no Debian package definition: packaging/*.yaml"
+    destination="$(apt_tests_codename)/$(apt_tests_component)"
+    [[ -n "${RELEASE_YES:-}" ]] || yesno "Publish development packages to APT $destination?" || die "stopped, nothing published"
+    exec "$(apt_package)" --publish --tests "$@"
+fi
 
 asked=${1:-}
 [[ $asked != status ]] || asked=
@@ -200,6 +215,7 @@ require "$gh"
 [[ ! -f composer.json ]] || require composer php
 ! packaged || require nfpm
 "$gh" auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login)"
+require_github_write "$repo" "$gh"
 if packaged; then
 	[[ -d "$(apt_repo_dir)/conf" ]] || die "APT_REPO_DIR is not set, or has no conf/ (the local clone of the apt repository, in .env)"
 	for setting in APT_REPO_HOST APT_REPO_PATH; do

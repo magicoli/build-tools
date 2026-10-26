@@ -2,6 +2,11 @@
 
 ### Unreleased
 
+- fix: reject APT publication when the requested package version was not indexed
+- fix: check GitHub write access before publishing a release
+- feature: publish test builds with `build-tools release --tests`
+- fix: load release configuration with test overrides and caller priority
+
 ### 0.1.9
 
 - bump magicoli/bash-tools to 1.0.8

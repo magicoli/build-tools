@@ -21,6 +21,7 @@ It brings [bash-tools](https://github.com/magicoli/bash-tools), whose functions 
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `build-tools build [deb\|zip]`    | the packages and the zip of the last commit, into `dist/` (refuses uncommitted changes and a stale `composer.lock`, `DIRTY=1` to go on) |
 | `build-tools release [VERSION]`   | the whole release, from where it stands: release commit, tag, push, packages, publication, GitHub release, next version              |
+| `build-tools release --tests`    | publish development packages to the configured test APT distribution, after confirmation; no version release or tag |
 | `build-tools release status`      | what is done and what remains                                                                                                       |
 | `build-tools switch dev\|release` | the projects of the family linked next to this one (dev), or required by version from Packagist (release)                           |
 | `build-tools stage DIR deb\|zip`  | the files a package or a zip holds, in DIR                                                                                          |
@@ -90,6 +91,8 @@ A release shows what it will publish (tag, message, assets, publication) and ask
 passphrase of the key, before anything is pushed; when a prompt times out because nobody was there, the failure is said and
 trying again is offered (with no terminal to answer, it stops). The next development version is committed, not pushed: it goes
 with the next release.
+
+Release settings are read from the project's `.env`. `release --tests` also reads `tests/.env` afterwards. Exported caller settings, including inline assignments, take precedence over both files; package publication preserves these overrides. Repository `.env` settings provide defaults.
 
 ## Tests
 

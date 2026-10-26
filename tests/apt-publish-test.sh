@@ -75,3 +75,15 @@ function test_resume_with_no_package_pending_signs_the_indices_again_and_the_hos
     assert_equals "update the indices" "$(git -C "$APT" log -1 --format=%s)"
     assert_contains "ssh host.example.test" "$(calls)"
 }
+
+function test_refused_inclusion_is_not_reported_as_published() {
+    export REPREPRO_SKIP_INCLUDE=1
+    local out status=0 before
+    before=$(git -C "$APT" rev-parse HEAD)
+    out=$(cd "$WORK" && "$ROOT/bin/apt-publish" demo_1.0.0_all.deb 2>&1) || status=$?
+    assert_not_equals 0 "$status"
+    assert_contains 'demo 1.0.0 is not indexed in main/stable' "$out"
+    assert_not_contains 'Published ' "$out"
+    assert_not_contains 'ssh host.example.test' "$(calls)"
+    assert_equals "$before" "$(git -C "$APT" rev-parse HEAD)"
+}

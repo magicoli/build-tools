@@ -51,6 +51,7 @@
 set -e
 
 APT_PACKAGE_ARGS=("$@")
+APT_PACKAGE_ENVIRONMENT=$(export -p)
 source "$(dirname "$(realpath "$0")")/../src/lib/common"
 # apt-publish is next to this script, even when called through a link
 BIN_DIR=$BUILD_TOOLS/bin
@@ -73,13 +74,14 @@ if $TESTS && ! $PUBLISH; then
     die "--tests requires --publish"
 fi
 
+package_settings=("$BUILD_PROJECT/.env")
+$TESTS && package_settings+=("$BUILD_PROJECT/tests/.env")
+load_build_environment "$APT_PACKAGE_ENVIRONMENT" "${package_settings[@]}"
+unset APT_PACKAGE_ENVIRONMENT package_settings
+
 REPO_DIR=${APT_REPO_DIR:-}
 if $PUBLISH; then
     [[ -d "$REPO_DIR/conf" ]] || die "APT_REPO_DIR is not set, or has no conf/ (the local clone of the apt repository, in .env)"
-    # Before publishing, bring this clone up to date and push its own commits:
-    # the server and other machines publish to the same repository.
-    git -C "$REPO_DIR" pull -q --rebase --autostash
-    git -C "$REPO_DIR" push -q
 fi
 
 PROJECT_DIR=$BUILD_PROJECT
@@ -99,12 +101,8 @@ else
     done
 fi
 
-# Settings: the .env of the apt repository, then the one of the project
-set -a
-for env in "${REPO_DIR:+$REPO_DIR/.env}" "$PROJECT_DIR/.env"; do
-    [[ -z "$env" || ! -f "$env" ]] || source "$env"
-done
-set +a
+# Repository settings are defaults; the effective project/test/caller settings win.
+load_build_environment "$(export -p)" "${REPO_DIR:+$REPO_DIR/.env}"
 
 # Whether a definition has the version of the project
 project_version() {
@@ -140,11 +138,15 @@ if $PUBLISH; then
         if ! gh auth status >/dev/null 2>&1; then
             die "The GitHub release needs gh, logged in (gh auth login)."
         fi
+        require_github_write "$GITHUB_REPO"
         if [[ $(git -C "$PROJECT_DIR" ls-remote --tags "$GITHUB_REMOTE" "refs/tags/$TAG" | cut -f1) != \
             $(git -C "$PROJECT_DIR" rev-parse "refs/tags/$TAG") ]]; then
             die "Push the tag to GitHub first: git push $GITHUB_REMOTE $TAG"
         fi
     fi
+    # Synchronize only after publication prerequisites have passed.
+    git -C "$REPO_DIR" pull -q --rebase --autostash
+    git -C "$REPO_DIR" push -q
 fi
 # The version of the build is the one of the zip and of the release: one definition (libexec/version)
 eval "$("$BUILD_TOOLS/libexec/version")"
@@ -182,15 +184,7 @@ target_of() {
 
 # Whether this destination already has the package version. The same package may be routed to several codenames.
 published_in() {
-    local file name version codename=$2 component=$3
-    file=$(basename "$1" .deb)
-    name=${file%%_*}
-    version=${file#*_}
-    version=${version%_*}
-    reprepro -b "$REPO_DIR" list "$codename" "$name" | awk -F'|' -v c="$codename" -v p="$component" -v n="$name" -v v="$version" '
-        $1 == c && $2 == p { entry = $3; sub(/^[^:]*: /, "", entry); if (entry == n " " v) found = 1 }
-        END { exit !found }
-    '
+    apt_has_package "$REPO_DIR" "$2" "$3" "$1"
 }
 
 published_everywhere() {

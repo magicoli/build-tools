@@ -16,6 +16,7 @@ make_stubs() {
 echo "gh $*" >>"$STUB_LOG"
 case "$1 $2" in
     "auth status") exit 0 ;;
+    "api repos/"*) [[ -n "${GH_READ_ONLY:-}" ]] && echo false || echo true; exit 0 ;;
     "release view") exit 1 ;;
     "release create") [[ -z "${FAIL_GH_CREATE:-}" ]] || { echo "gh: cannot create the release" >&2; exit 1; } ;;
 esac
@@ -53,6 +54,10 @@ case "$1" in
     includedeb)
         dist=$2
         shift 2
+        if [[ -n "${REPREPRO_SKIP_INCLUDE:-}" ]]; then
+            echo "Skipping inclusion: a newer version is already present."
+            exit 0
+        fi
         for deb in "$@"; do
             mkdir -p "$repo/public/pool/main/x"
             cp "$deb" "$repo/public/pool/main/x/"
@@ -113,6 +118,7 @@ STUB
     cat >"$WORK/bin/apt-package-stub" <<'STUB'
 #!/usr/bin/env bash
 echo "apt-package $*" >>"$STUB_LOG"
+[[ -z "${REPORT_APT_ENV:-}" ]] || printf 'repository=%s component=%s\n' "${APT_REPO_DIR:-}" "${APT_REPO_COMPONENT:-}"
 if [[ -n "${APT_FAIL_ONCE:-}" && ! -f "$STUB_STATE/apt.failed" ]]; then
     : >"$STUB_STATE/apt.failed"
     echo "gpgme gave error Pinentry:62:  Timeout"
@@ -184,7 +190,7 @@ new_work() {
 drop_work() {
     rm -rf "$WORK"
     unset STUB_LOG STUB_STATE APT_REPO_DIR BUILD_NAME RELEASE_GITHUB_REPO RELEASE_YES APT_PACKAGE APT_PUBLISH \
-        FAIL_GH_CREATE GPG_FAIL_FIRST REPREPRO_FAIL_INCLUDE REPREPRO_FAIL_EXPORT APT_FAIL_ONCE APT_REPO_PRERELEASE_COMPONENT APT_REPO_COMPONENT APT_REPO_DIST APT_REPO_TESTS_DIST APT_REPO_TESTS_COMPONENT \
+        FAIL_GH_CREATE GH_READ_ONLY REPORT_APT_ENV GPG_FAIL_FIRST REPREPRO_FAIL_INCLUDE REPREPRO_FAIL_EXPORT REPREPRO_SKIP_INCLUDE APT_FAIL_ONCE APT_REPO_PRERELEASE_COMPONENT APT_REPO_COMPONENT APT_REPO_DIST APT_REPO_TESTS_DIST APT_REPO_TESTS_COMPONENT \
         APT_REPO_HOST APT_REPO_PATH
 }
 

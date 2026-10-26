@@ -181,3 +181,14 @@ function test_tests_option_requires_publishing() {
     out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --tests 2>&1)
     assert_contains "--tests requires --publish" "$out"
 }
+
+function test_tests_settings_survive_package_publication() {
+    mkdir -p "$PROJECT/tests"
+    printf 'APT_REPO_DIR="/project/not-a-repo"\n' >"$PROJECT/.env"
+    printf 'APT_REPO_DIR="%s"\nAPT_REPO_TESTS_DIST=tests\nAPT_REPO_TESTS_COMPONENT=tests\n' "$APT" >"$PROJECT/tests/.env"
+    unset APT_REPO_DIR
+    local status=0 output
+    output=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests 2>&1) || status=$?
+    assert_equals 0 "$status"
+    assert_contains 'apt-publish dist=tests component=tests' "$(calls)"
+}

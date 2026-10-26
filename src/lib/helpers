@@ -45,3 +45,23 @@ retry() { # what, command...
         yesno $yes "$what failed. Try again?" || die "$what failed, stopped"
     done
 }
+
+# Refuse a release before changing repositories when GitHub access is read-only.
+require_github_write() { # owner/repository [gh executable]
+    local repository=$1 cli=${2:-gh} writable
+    writable=$("$cli" api "repos/$repository" --jq '.permissions.push' 2>/dev/null) || die "could not verify GitHub write access for $repository"
+    [[ "$writable" == true ]] || die "GitHub write access is required for $repository; authenticate gh with an account and token allowed to publish releases"
+}
+
+# Load ordered configuration files, then restore values exported by the caller.
+load_build_environment() { # exported environment snapshot, file...
+    local inherited=$1 file allexport=
+    shift
+    [[ $- != *a* ]] || allexport=yes
+    set -a
+    for file in "$@"; do
+        [[ -z "$file" || ! -r "$file" ]] || source "$file"
+    done
+    [[ -n "$allexport" ]] || set +a
+    eval "$(printf '%s\n' "$inherited" | sed -n 's/^declare -x /export /p')"
+}

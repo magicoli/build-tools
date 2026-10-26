@@ -57,3 +57,16 @@ apt_codename_of() { # package [component]
 
 apt_tests_codename() { local value; value=$(apt_setting APT_REPO_TESTS_DIST); echo "${value:-tests}"; }
 apt_tests_component() { local value; value=$(apt_setting APT_REPO_TESTS_COMPONENT); echo "${value:-tests}"; }
+
+# Whether a package file's exact version is registered in the requested component.
+apt_has_package() { # repository codename component package.deb
+    local file name version
+    file=$(basename "$4" .deb)
+    name=${file%%_*}
+    version=${file#*_}
+    version=${version%_*}
+    reprepro -b "$1" list "$2" "$name" | awk -F'|' -v c="$2" -v p="$3" -v n="$name" -v v="$version" '
+        $1 == c && $2 == p { entry = $3; sub(/^[^:]*: /, "", entry); if (entry == n " " v) found = 1 }
+        END { exit !found }
+    '
+}

@@ -65,6 +65,15 @@ if [[ $resume == false ]]; then
             die "reprepro failed, see above"
         fi
     fi
+    for deb in "$@"; do
+        if ! apt_has_package "$REPO_DIR" "$APT_REPO_DIST" "$APT_REPO_COMPONENT" "$deb"; then
+            file=$(basename "$deb" .deb)
+            name=${file%%_*}
+            version=${file#*_}
+            version=${version%_*}
+            die "$name $version is not indexed in $APT_REPO_DIST/$APT_REPO_COMPONENT; reprepro did not accept the package (see above)"
+        fi
+    done
 else
     retry "The export of the indices" reprepro -b "$REPO_DIR" export
 fi
