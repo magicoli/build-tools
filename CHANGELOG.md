@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.11
 
 - update: select APT distributions from project environment settings
 
