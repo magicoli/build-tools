@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.10
 
 - fix: reject APT publication when the requested package version was not indexed
 - fix: check GitHub write access before publishing a release
