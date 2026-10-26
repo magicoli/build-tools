@@ -73,15 +73,17 @@ function test_a_name_after_the_hyphen_is_a_pre_release_and_a_number_is_not() {
     done
 }
 
-function test_package_names_follow_the_repository_route_rules() {
+function test_distribution_defaults_to_main() {
     export APT_REPO_DIR="$APT"
-    assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core-cli" </dev/null)"
-    assert_equals core "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of core" </dev/null)"
-    assert_equals wrap "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of wrap-cms" </dev/null)"
-    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools stable" </dev/null)"
-    assert_equals "main charm" "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codenames_of bash-tools stable" </dev/null)"
-    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of bash-tools unstable" </dev/null)"
-    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_codename_of headless-kiosk" </dev/null)"
+    assert_equals main "$(bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0" </dev/null)"
+}
+
+function test_project_selects_multiple_distributions() {
+    assert_equals 'main charm' "$(APT_REPO_DIST='main charm' bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0" </dev/null)"
+}
+
+function test_prerelease_destinations_can_differ() {
+    assert_equals main "$(APT_REPO_DIST='main charm' APT_REPO_PRERELEASE_DIST=main bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0~beta.1" </dev/null)"
 }
 
 function test_a_pre_release_stays_in_its_series_and_a_stable_one_moves_on() {
@@ -131,4 +133,13 @@ function test_only_a_number_with_dots_makes_a_version_tag() {
         bash -c "source '$ROOT/src/lib/version'; is_version_tag '$tag'" && fail "$tag is not a version"
     done
     assert_equals "" ""
+}
+
+function test_legacy_routes_still_work_without_project_settings() {
+    assert_equals core "$(APT_REPO_DIR="$APT" bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0 core-cli" </dev/null)"
+    assert_equals 'main charm' "$(APT_REPO_DIR="$APT" bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0 bash-tools" </dev/null)"
+}
+
+function test_project_settings_override_legacy_routes() {
+    assert_equals 'main charm' "$(APT_REPO_DIR="$APT" APT_REPO_DIST='main charm' bash -c "source '$ROOT/src/lib/helpers'; apt_distributions 1.0.0 core-cli" </dev/null)"
 }

@@ -28,6 +28,19 @@ apt_component_of() { # version
     fi
 }
 
+# Project settings take precedence over legacy repository rules and the main default.
+apt_distributions() { # version [package]
+    local destinations=${APT_REPO_DIST:-}
+    if [[ $1 == *~* || $1 =~ -[^0-9] ]]; then
+        destinations=${APT_REPO_PRERELEASE_DIST:-$destinations}
+    fi
+    if [[ -n "$destinations" ]]; then
+        printf '%s\n' "$destinations"
+    else
+        apt_codenames_of "${2:-}" "$(apt_component_of "$1")"
+    fi
+}
+
 # Resolve a package name using the ordered rules in conf/package-routes.
 # A component-qualified rule has: pattern component=<name> codename [codename...].
 apt_codenames_of() { # package [component]

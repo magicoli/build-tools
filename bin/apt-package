@@ -10,7 +10,8 @@
 # Where to publish is not known here: it is in the .env of the project, and the .env of the apt repository for what the
 # project leaves out:
 #   APT_REPO_DIR              the local clone of the apt repository (conf/distributions, db, public): required to publish
-#   conf/package-routes       ordered package-name patterns and destination codenames (space-separated)
+#   APT_REPO_DIST           project distributions, space-separated (default: main)
+#   APT_REPO_PRERELEASE_DIST optional different distributions for pre-releases
 #   APT_REPO_COMPONENT        component for stable versions (default: stable)
 #   APT_REPO_PRERELEASE_COMPONENT component for pre-releases (default: stable)
 #   APT_REPO_TESTS_DIST       codename for --tests (default: tests)
@@ -102,6 +103,8 @@ else
 fi
 
 # Repository settings are defaults; the effective project/test/caller settings win.
+# Distribution overrides belong to the project, not repository-wide defaults.
+export APT_REPO_DIST=${APT_REPO_DIST:-} APT_REPO_PRERELEASE_DIST=${APT_REPO_PRERELEASE_DIST:-}
 load_build_environment "$(export -p)" "${REPO_DIR:+$REPO_DIR/.env}"
 
 # Whether a definition has the version of the project
@@ -169,7 +172,9 @@ mkdir -p dist
 target_of() {
     local file name version component codename
     if $TESTS; then
-        printf '%s|%s\n' "$(apt_tests_codename)" "$(apt_tests_component)"
+        while read -r codename; do
+            [[ -z "$codename" ]] || printf '%s|%s\n' "$codename" "$(apt_tests_component)"
+        done < <(tr '[:space:]' '\n' <<<"$(apt_tests_codename)")
         return
     fi
     file=$(basename "$1" .deb)
@@ -178,8 +183,8 @@ target_of() {
     version=${version%_*}
     component=$(apt_component_of "$version")
     while read -r codename; do
-        printf '%s|%s\n' "$codename" "$component"
-    done < <(tr ' ' '\n' <<<"$(apt_codenames_of "$name" "$component")")
+        [[ -z "$codename" ]] || printf '%s|%s\n' "$codename" "$component"
+    done < <(tr '[:space:]' '\n' <<<"$(apt_distributions "$version" "$name")")
 }
 
 # Whether this destination already has the package version. The same package may be routed to several codenames.

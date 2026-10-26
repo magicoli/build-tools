@@ -61,7 +61,7 @@ function test_the_question_shows_one_report_of_what_will_be_published() {
 }
 
 function test_the_release_plan_shows_every_package_distribution() {
-    printf 'demo component=stable main charm\n* main\n' >"$APT/conf/package-routes"
+    printf 'APT_REPO_DIST="main charm"\n' >"$PROJECT/.env"
     local out
     out=$(release "n")
     assert_contains "  targets: host.example.test (main,charm/stable), github.com/owner/demo" "$out"

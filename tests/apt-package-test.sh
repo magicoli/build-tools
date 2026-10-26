@@ -117,21 +117,15 @@ function test_without_a_prerelease_component_all_go_to_the_stable_component() {
     assert_contains "dist=main component=stable" "$(grep '^apt-publish' "$STUB_LOG")"
 }
 
-function test_packages_are_routed_by_name_to_configured_codenames() {
-    printf 'name: core-cli\narch: all\nversion: 3.0.0\n' >"$PROJECT/packaging/core-cli.yaml"
-    printf 'name: wrap-tools\narch: all\nversion: 3.0.0\n' >"$PROJECT/packaging/wrap-tools.yaml"
-    printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
-    git -C "$PROJECT" add -A
-    git -C "$PROJECT" commit -q -m "route packages"
-    git -C "$PROJECT" tag -a v1.2.4 -m "v1.2.4"
+function test_project_settings_select_both_destinations() {
+    printf 'APT_REPO_DIST="main charm"\n' >"$PROJECT/.env"
     (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
-    assert_contains "dist=core component=stable core-cli_3.0.0_all.deb" "$(calls)"
-    assert_contains "dist=wrap component=stable wrap-tools_3.0.0_all.deb" "$(calls)"
-    assert_contains "dist=main component=stable bash-tools_1.0.0_all.deb" "$(calls)"
-    assert_contains "dist=charm component=stable bash-tools_1.0.0_all.deb" "$(calls)"
+    assert_contains 'dist=main component=stable demo_1.2.3_all.deb' "$(calls)"
+    assert_contains 'dist=charm component=stable demo_1.2.3_all.deb' "$(calls)"
 }
 
 function test_a_package_missing_from_one_destination_is_published_there_only() {
+    printf 'APT_REPO_DIST="main charm"\nAPT_REPO_PRERELEASE_DIST=main\n' >"$PROJECT/.env"
     printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "route bash-tools"
@@ -143,6 +137,7 @@ function test_a_package_missing_from_one_destination_is_published_there_only() {
 }
 
 function test_a_package_in_another_component_is_not_treated_as_published() {
+    printf 'APT_REPO_DIST="main charm"\nAPT_REPO_PRERELEASE_DIST=main\n' >"$PROJECT/.env"
     printf 'name: bash-tools\narch: all\nversion: 1.0.0\n' >"$PROJECT/packaging/bash-tools.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "route bash-tools"
@@ -154,6 +149,7 @@ function test_a_package_in_another_component_is_not_treated_as_published() {
 }
 
 function test_a_prerelease_with_a_stable_only_route_stays_in_its_default_distribution() {
+    printf 'APT_REPO_DIST="main charm"\nAPT_REPO_PRERELEASE_DIST=main\n' >"$PROJECT/.env"
     printf 'name: bash-tools\narch: all\nversion: 1.0.0~beta.1\n' >"$PROJECT/packaging/bash-tools.yaml"
     git -C "$PROJECT" add -A
     git -C "$PROJECT" commit -q -m "route bash-tools prerelease"
@@ -191,4 +187,30 @@ function test_tests_settings_survive_package_publication() {
     output=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests 2>&1) || status=$?
     assert_equals 0 "$status"
     assert_contains 'apt-publish dist=tests component=tests' "$(calls)"
+}
+
+function test_test_builds_can_target_multiple_distributions() {
+    export APT_REPO_TESTS_DIST='tests tests-secondary'
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests >/dev/null 2>&1)
+    assert_contains 'dist=tests component=tests' "$(calls)"
+    assert_contains 'dist=tests-secondary component=tests' "$(calls)"
+    assert_equals 2 "$(grep -c '^apt-publish ' "$STUB_LOG")"
+}
+
+function test_distribution_lists_ignore_whitespace_and_duplicates() {
+    printf 'APT_REPO_DIST=" main\tcharm  main "\n' >"$PROJECT/.env"
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains 'dist=main component=stable' "$(calls)"
+    assert_contains 'dist=charm component=stable' "$(calls)"
+    assert_equals 2 "$(grep -c '^apt-publish ' "$STUB_LOG")"
+}
+
+function test_legacy_routing_survives_repository_defaults() {
+    printf 'name: core-cli\narch: all\nversion: 3.0.0\n' >"$PROJECT/packaging/core-cli.yaml"
+    printf 'APT_REPO_DIST=main\n' >>"$APT/.env"
+    git -C "$PROJECT" add -A
+    git -C "$PROJECT" commit -qm 'legacy package'
+    git -C "$PROJECT" tag -a v1.2.4 -m 'v1.2.4'
+    (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
+    assert_contains 'dist=core component=stable core-cli_3.0.0_all.deb' "$(calls)"
 }

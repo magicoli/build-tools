@@ -184,7 +184,7 @@ show_plan() {
 		others=$(own_version | paste -sd, - | sed 's/,/, /g')
 		first_package=$(carrying_version | head -1)
 		[[ -n "$first_package" ]] || first_package=$(basename "$(ls packaging/*.yaml | head -1)" .yaml)
-		destinations=$(apt_codenames_of "$first_package" "$(apt_component_of "$new")" | tr ' ' ',')
+		destinations=$(apt_distributions "$new" "$first_package" | tr ' ' ',')
 		publication="$(apt_setting APT_REPO_HOST) ($destinations/$(apt_component_of "$new")), $publication"
 	fi
 	report="preparing to publish $project $new"

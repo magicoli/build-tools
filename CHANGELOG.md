@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- update: select APT distributions from project environment settings
+
 ### 0.1.10
 
 - fix: reject APT publication when the requested package version was not indexed
