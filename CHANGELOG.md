@@ -2,7 +2,7 @@
 
 ### Unreleased
 
-- fix: switch duplicate sibling requirements in `require-dev` with `require`
+- fix: remove duplicated siblings from `require-dev` when switching modes
 
 ### 0.1.11
 

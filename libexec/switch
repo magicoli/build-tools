@@ -66,7 +66,7 @@ foreach ($spec as $name => $value) {
     $constraint = $mode === 'dev' ? '@dev' : $value;
     $json->require->$name = $constraint;
     if (isset($json->{'require-dev'}->$name)) {
-        $json->{'require-dev'}->$name = $constraint;
+        unset($json->{'require-dev'}->$name);
     }
 }
 

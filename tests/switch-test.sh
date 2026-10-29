@@ -32,14 +32,14 @@ function tear_down() {
     drop_work
 }
 
-function test_dev_switch_updates_require_and_require_dev_for_linked_siblings() {
+function test_dev_switch_removes_duplicate_sibling_from_require_dev() {
     (cd "$PROJECT" && "$BT" switch dev >/dev/null)
     local require require_dev repository
     require=$(php -r 'echo json_decode(file_get_contents($argv[1]))->require->{"magicoli/build-tools"};' "$PROJECT/composer.json")
-    require_dev=$(php -r 'echo json_decode(file_get_contents($argv[1]))->{"require-dev"}->{"magicoli/build-tools"};' "$PROJECT/composer.json")
+    require_dev=$(php -r 'echo isset(json_decode(file_get_contents($argv[1]))->{"require-dev"}->{"magicoli/build-tools"}) ? "present" : "absent";' "$PROJECT/composer.json")
     repository=$(php -r 'echo json_decode(file_get_contents($argv[1]))->repositories[0]->url;' "$PROJECT/composer.json")
     assert_equals '@dev' "$require"
-    assert_equals '@dev' "$require_dev"
+    assert_equals 'absent' "$require_dev"
     assert_equals '../build-tools/' "$repository"
     assert_contains 'composer update magicoli/build-tools --no-interaction' "$(calls)"
 }
