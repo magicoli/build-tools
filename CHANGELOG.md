@@ -1,6 +1,6 @@
 ## Changelog
 
-### Unreleased
+### 0.1.12-beta.1
 
 - fix: keep dev-only siblings in `require-dev` when switching modes
 - fix: remove duplicated siblings from `require-dev` when switching modes
