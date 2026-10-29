@@ -21,6 +21,7 @@ function set_up() {
     git -C "$PROJECT" commit -q -m project
     git -C "$SIBLING" add -A
     git -C "$SIBLING" commit -q -m sibling
+    git -C "$SIBLING" tag -a 0.1.11 -m 0.1.11
     cat >"$WORK/bin/composer" <<'STUB'
 #!/usr/bin/env bash
 echo "composer $*" >>"$STUB_LOG"
@@ -52,4 +53,16 @@ function test_dev_switch_keeps_dev_only_sibling_in_require_dev() {
     require_dev=$(php -r 'echo json_decode(file_get_contents($argv[1]))->{"require-dev"}->{"magicoli/build-tools"};' "$PROJECT/composer.json")
     assert_equals 'absent' "$require"
     assert_equals '@dev' "$require_dev"
+}
+
+function test_release_switch_keeps_dev_only_sibling_out_of_require() {
+    printf '{"name":"example/app","require":{},"require-dev":{"magicoli/build-tools":"@dev"}}\n' >"$PROJECT/composer.json"
+    (cd "$PROJECT" && "$BT" switch release >/dev/null)
+    local require require_dev repositories
+    require=$(php -r 'echo isset(json_decode(file_get_contents($argv[1]))->require->{"magicoli/build-tools"}) ? "present" : "absent";' "$PROJECT/composer.json")
+    require_dev=$(php -r 'echo json_decode(file_get_contents($argv[1]))->{"require-dev"}->{"magicoli/build-tools"};' "$PROJECT/composer.json")
+    repositories=$(php -r 'echo isset(json_decode(file_get_contents($argv[1]))->repositories) ? "present" : "absent";' "$PROJECT/composer.json")
+    assert_equals 'absent' "$require"
+    assert_equals '^0.1.11' "$require_dev"
+    assert_equals 'absent' "$repositories"
 }
