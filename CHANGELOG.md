@@ -2,6 +2,8 @@
 
 ### Unreleased
 
+- fix: switch duplicate sibling requirements in `require-dev` with `require`
+
 ### 0.1.11
 
 - update: select APT distributions from project environment settings
