@@ -24,9 +24,13 @@
 # build, e.g. to install dependencies into a build folder. It can give variables to the definitions in
 # build/packaging.env (NAME=value lines).
 #
-# ${VERSION} in the definitions is the version of the project, the current git
-# tag (1.2.3); other builds get a development version, 1.2.3+5.g1a2b3c4 for 5
-# commits after the tag, which sorts after it. ${DEB_VERSION} is that
+# ${VERSION} in the definitions is the version of the project, the one of the
+# zip and of the release (libexec/version, one definition): the current git tag
+# (1.2.3); other builds get the version in progress with the number of commits
+# of HEAD and its hash, 1.2.4-dev.153+g1a2b3c4 (a pre-release in progress keeps
+# its series: 3.0.0-beta.13.453+g1a2b3c4), which sorts after the last release of
+# that series and, by its number of commits, after the builds before it on the
+# same branch. ${DEB_VERSION} is that
 # version as nfpm writes it with version_schema: semver (1.2.3-beta.1 ->
 # 1.2.3~beta.1), e.g. for a dependency between packages of the same project:
 # other-package (= ${DEB_VERSION}). A package can have its own version
