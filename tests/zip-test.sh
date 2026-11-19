@@ -15,8 +15,8 @@ function tear_down() {
 
 function test_the_zip_is_made_from_the_committed_files() {
     (cd "$PROJECT" && "$BT" zip >/dev/null 2>&1)
-    assert_file_exists "$PROJECT"/dist/demo-1.0.0-dev.*.zip
-    assert_contains "demo/README.md" "$(unzip -l "$PROJECT"/dist/demo-1.0.0-dev.*.zip)"
+    assert_file_exists "$PROJECT"/dist/demo-1.0.0-dev+*.zip
+    assert_contains "demo/README.md" "$(unzip -l "$PROJECT"/dist/demo-1.0.0-dev+*.zip)"
 }
 
 function test_a_project_that_makes_its_zip_itself_does() {
@@ -27,5 +27,5 @@ function test_a_project_that_makes_its_zip_itself_does() {
     git -C "$PROJECT" commit -q -m "its own zip"
     (cd "$PROJECT" && "$BT" zip >/dev/null 2>&1)
     assert_file_exists "$PROJECT/dist/demo-own.zip"
-    assert_equals "0" "$(ls "$PROJECT"/dist/demo-1.0.0-dev.*.zip 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "0" "$(ls "$PROJECT"/dist/demo-1.0.0-dev+*.zip 2>/dev/null | wc -l | tr -d ' ')"
 }

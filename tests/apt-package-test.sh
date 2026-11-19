@@ -28,11 +28,11 @@ function test_it_builds_the_package_with_the_version_of_the_tag() {
     assert_contains "version: 1.2.3" "$(cat "$STUB_STATE/last-definition.yaml")"
 }
 
-function test_a_build_after_the_tag_is_the_version_in_progress_with_the_commits_and_the_hash() {
+function test_a_build_after_the_tag_is_the_tag_with_the_commits_since_and_the_hash() {
     echo 1.2.4-dev >"$PROJECT/.version"
     git -C "$PROJECT" commit -q -am "after the tag"
     (cd "$PROJECT" && "$ROOT/bin/apt-package" >/dev/null 2>&1)
-    assert_matches "version: 1\.2\.4-dev\.[0-9]+\+g[0-9a-f]+" "$(cat "$STUB_STATE/last-definition.yaml")"
+    assert_matches "version: 1\.2\.3\+1\.g[0-9a-f]+" "$(cat "$STUB_STATE/last-definition.yaml")"
 }
 
 function test_the_package_has_the_version_of_the_zip_and_of_the_release() {
@@ -167,7 +167,7 @@ function test_tests_option_publishes_untagged_development_packages_to_tests() {
     export APT_REPO_DIR="$APT"
     out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" --publish --tests 2>&1)
     assert_contains "apt-publish dist=tests component=tests" "$(calls)"
-    assert_matches "demo_1.2.3~dev\.[0-9]+\+g[0-9a-f]+_all\.deb" "$(calls)"
+    assert_matches "demo_1\.2\.3\+[0-9]+\.g[0-9a-f]+_all\.deb" "$(calls)"
     assert_not_contains "gh " "$(calls)"
     assert_not_contains "version tag" "$out"
 }

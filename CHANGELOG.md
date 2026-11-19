@@ -2,6 +2,7 @@
 
 ### Unreleased
 
+- change (version): a build that is not on a tag is the last version tag, the number of commits since and the hash, as git describe says it (3.0.0-beta.13+216.g1a2b3c4), the same for a commit in every checkout and the one apt-package always gave; before any tag, the version in progress with all the commits (1.2.4-dev+153.g1a2b3c4). The builds made with the number of all the commits (3.0.0~beta.13.589+g...) sort after them: a server that has one installs the next with --allow-downgrades, once
 - fix: reject packages duplicated in `require` and `require-dev`
 
 ### 0.1.12-beta.1

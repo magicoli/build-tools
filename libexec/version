@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The version of this build of the project, as VERSION= and DEB_VERSION= lines, what packaging/*.yaml expand: the tag when HEAD is on
-# a version tag (v1.1.1 or 1.1.1), else the version in progress (see current_version in src/lib/version, a pre-release such
-# as 1.1.2-dev) with the number of commits and the hash of HEAD, 1.1.2-dev.14+g1a2b3c4 (g is for git, as git describe
-# writes it). Changed files add .dirty (commit before a build you keep: the hash must exist).
+# a version tag (v1.1.1 or 1.1.1), else the last version tag with the number of commits since and the hash of HEAD, as git describe
+# says it (1.1.1+14.g1a2b3c4: after 1.1.1, before the next release; g is for git), the same for a commit in every checkout. Before
+# any version tag, the version in progress (see current_version in src/lib/version: .version, composer.json) with all the commits
+# (1.1.2-dev+14.g1a2b3c4). Changed files add .dirty (commit before a build you keep: the hash must exist).
 
 set -e
 source "$(dirname "$(realpath "$0")")/../src/lib/common"
@@ -11,18 +12,15 @@ if tag=$(version_describe --exact-match); then
     version=${tag#v}
     git diff --quiet HEAD || version+=+dirty
 else
-    base=$(current_version) || die "no version: add .version, a version to composer.json, or tag one"
-    if [[ "$base" != *-* ]]; then
-        base=$base-dev
-    elif [[ "$base" != *-dev ]]; then
-        # A pre-release in progress (3.0.0-beta.5) is the next one to release: its builds come after the last one of the
-        # series (3.0.0-beta.4.12+g...), not after itself, or they would sort after the release
-        last=$(last_tag)
-        [[ -z "$last" || "${last%%-*}" != "${base%%-*}" ]] || base=$last
-    fi
     dirty=
     git diff --quiet HEAD || dirty=.dirty
-    version=$base.$(git rev-list --count HEAD)+g$(git rev-parse --short HEAD)$dirty
+    if described=$(version_describe --long) && [[ $described =~ ^v?(.+)-([0-9]+)-g([0-9a-f]+)$ ]]; then
+        version=${BASH_REMATCH[1]}+${BASH_REMATCH[2]}.g${BASH_REMATCH[3]}$dirty
+    else
+        base=$(current_version) || die "no version: add .version, a version to composer.json, or tag one"
+        [[ "$base" == *-* ]] || base=$base-dev
+        version=$base+$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)$dirty
+    fi
 fi
 
 echo "VERSION=$version"
