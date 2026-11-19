@@ -107,6 +107,14 @@ else
     done
 fi
 
+# A dependency names a release, never a build of development (3.0.0~beta.13.493, 1.2.3+216.g43ee042): such a number sorts after
+# the releases and apart from the builds of another checkout, so the packages that should satisfy it cannot
+for definition in "${CONFIGS[@]}"; do
+    builds=$(grep -nE '\([<>=]{1,2} *[^)$]*([-~.](alpha|beta|rc|dev)\.[0-9]+\.[0-9]+|\+[0-9]+\.g[0-9a-f]+|\+g[0-9a-f]+)[^)]*\)' "$definition" || true)
+    [[ -z "$builds" ]] || die "$(basename "$definition"): a dependency names a build of development, name a release instead:
+$builds"
+done
+
 # Repository settings are defaults; the effective project/test/caller settings win.
 # Distribution overrides belong to the project, not repository-wide defaults.
 export APT_REPO_DIST=${APT_REPO_DIST:-} APT_REPO_PRERELEASE_DIST=${APT_REPO_PRERELEASE_DIST:-}

@@ -214,3 +214,16 @@ function test_legacy_routing_survives_repository_defaults() {
     (cd "$PROJECT" && "$ROOT/bin/apt-package" --publish >/dev/null 2>&1)
     assert_contains 'dist=core component=stable core-cli_3.0.0_all.deb' "$(calls)"
 }
+
+# A dependency names a release, never a build of development: its number sorts after the releases and before the builds of
+# another checkout, so the right packages cannot satisfy it
+function test_a_dependency_on_a_build_of_development_is_refused() {
+    local out
+    printf 'depends:\n  - other (>= 3.0.0~beta.13.493)\n  - more (= 1.2.3+216.g43ee042)\n  - fine (>= 3.0.0~beta.13)\n  - own (= ${DEB_VERSION})\n' >>"$PROJECT/packaging/demo.yaml"
+    git -C "$PROJECT" commit -q -am "a dependency on a build"
+    out=$(cd "$PROJECT" && "$ROOT/bin/apt-package" 2>&1) && fail "apt-package built it"
+    assert_contains "other (>= 3.0.0~beta.13.493)" "$out"
+    assert_contains "more (= 1.2.3+216.g43ee042)" "$out"
+    assert_not_contains "fine" "$out"
+    assert_file_not_exists "$PROJECT/dist/demo_1.2.3+1.g$(git -C "$PROJECT" rev-parse --short HEAD)_all.deb"
+}

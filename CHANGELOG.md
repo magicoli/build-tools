@@ -2,6 +2,7 @@
 
 ### Unreleased
 
+- fix (apt-package): a definition whose dependency names a build of development (3.0.0~beta.13.493, 1.2.3+216.g43ee042) is refused, with the lines that do: a dependency names a release, the number of a build sorts apart from the builds of another checkout
 - change (version): a build that is not on a tag is the last version tag, the number of commits since and the hash, as git describe says it (3.0.0-beta.13+216.g1a2b3c4), the same for a commit in every checkout and the one apt-package always gave; before any tag, the version in progress with all the commits (1.2.4-dev+153.g1a2b3c4). The builds made with the number of all the commits (3.0.0~beta.13.589+g...) sort after them: a server that has one installs the next with --allow-downgrades, once
 - fix: reject packages duplicated in `require` and `require-dev`
 
