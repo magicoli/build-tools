@@ -1,5 +1,7 @@
 ## Changelog
 
+### Unreleased
+
 ### 0.2.0
 
 - change: build versions follow git describe (tag, commits since, hash)
